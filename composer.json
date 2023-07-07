@@ -1,0 +1,11 @@
+{
+    "require": {
+        "friendsofphp/php-cs-fixer": "^3.21",
+        "google/cloud-dlp": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "TestFixer\\": "src/"
+        }
+    }
+}
