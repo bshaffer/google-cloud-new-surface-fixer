@@ -77,6 +77,7 @@ class CustomFixer extends AbstractFixer
 
         // Find the RPC methods being called on the clients
         $rpcCalls = [];
+        $rpcCallCount = 0;
         for ($index = 0; $index < count($tokens); $index++) {
             $token = $tokens[$index];
             if ($token->isGivenKind(T_VARIABLE)) {
@@ -85,27 +86,51 @@ class CustomFixer extends AbstractFixer
                     $nextIndex = $tokens->getNextMeaningfulToken($index);
                     $nextToken = $tokens[$nextIndex];
                     if ($nextToken->isGivenKind(T_OBJECT_OPERATOR)) {
+                        $rpcCallCount++;
                         $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
                         $nextToken = $tokens[$nextIndex];
                         $clientFullName = array_search($token->getContent(), $clientVars);
                         [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
                         $rpcName = $nextToken->getContent();
-                        $rpcCalls[] = [$clientFullName, $rpcName];
-                        // Create the "request" variable
+                        $requestShortName = ucfirst($rpcName) . 'Request';
+                        $rpcCalls[] = [$clientFullName, $requestShortName];
                         $clientShortName = $clients[$clientFullName];
-                        $buildRequestTokens = [
-                            new Token([T_STRING, '$request = (new ' . $clientShortName . '())']),
-                        ];
+
+                        // determine the indent
+                        $indent = '';
+                        $lineStart = $clientStartIndex;
+                        $i = 1;
+                        while (
+                            $clientStartIndex - $i >= 0
+                            && false === strpos($tokens[$clientStartIndex - $i]->getContent(), "\n")
+                        ) {
+                            $i++;
+                        }
+                        if ($clientStartIndex - $i >= 0) {
+                            $lineStart = $clientStartIndex - $i;
+                            $indent = str_replace("\n", '', $tokens[$clientStartIndex - $i]->getContent());
+                        }
+
+                        // Tokens for the "$request" variable
+                        $buildRequestTokens = [];
+                        $requestVarName = '$request' . ($rpcCallCount == 1 ? '' : $rpcCallCount);
+
+                        // initiate $request variable
+                        // Add indent
+                        $buildRequestTokens[] = new Token([T_STRING, PHP_EOL. PHP_EOL . $indent]);
+                        $buildRequestTokens[] = new Token([T_STRING, $requestVarName . ' = (new ' . $requestShortName . '())']);
                         foreach ($arguments as $argIndex => $argument) {
                             foreach ($this->getSettersFromToken($clientFullName, $rpcName, $argIndex, $argument) as $setter) {
                                 list($method, $var) = $setter;
-                                $buildRequestTokens[] = new Token([T_STRING, '->' . $method]);
-                                $buildRequestTokens[] = new Token([T_STRING, '(' . $var . ')']);
+                                $buildRequestTokens[] = new Token([T_STRING, PHP_EOL . $indent . $indent]); // whitespace
+                                $buildRequestTokens[] = new Token([T_STRING, '->' . $method]);   // setter method
+                                $buildRequestTokens[] = new Token([T_STRING, '(' . $var . ')']); // setter value
                             }
                         }
-                        $buildRequestTokens[] = new Token([T_STRING, ';' . PHP_EOL]);
+                        $buildRequestTokens[] = new Token([T_STRING, ';']);
+                        $buildRequestTokens[] = new Token([T_STRING, PHP_EOL . $indent]);
 
-                        $tokens->insertAt($clientStartIndex, $buildRequestTokens);
+                        $tokens->insertAt($lineStart, $buildRequestTokens);
 
                         // Replace the arguments with $request
                         if ($lastIndex - $firstIndex > 1) {
@@ -113,7 +138,7 @@ class CustomFixer extends AbstractFixer
                                 $firstIndex + 1 + count($buildRequestTokens),
                                 $lastIndex - 1 + count($buildRequestTokens),
                                 [
-                                    new Token([T_STRING, '$request']),
+                                    new Token([T_STRING, $requestVarName]),
                                 ]
                             );
                         }
@@ -126,11 +151,11 @@ class CustomFixer extends AbstractFixer
         // Find all request classes to import
         $requestClasses = [];
         foreach ($rpcCalls as $rpcCall) {
-            [$clientFullName, $method] = $rpcCall;
+            [$clientFullName, $requestShortName] = $rpcCall;
             $parts = explode('\\', $clientFullName);
             array_pop($parts); // remove client name to get namespace
             $namespace = implode('\\', $parts);
-            $requestClasses[] = sprintf('%s\\%sRequest', $namespace, ucfirst($method));
+            $requestClasses[] = sprintf('%s\\%s', $namespace, $requestShortName);
         }
         $requestClasses = array_unique($requestClasses);
 
@@ -143,7 +168,7 @@ class CustomFixer extends AbstractFixer
         $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
     }
 
-    private function getSettersFromToken(string $clientFullName, string $rpcName, int $argIndex, array $argument): array
+    private function getSettersFromToken(string $clientFullName, string $rpcName, int $argIndex, array $argumentTokens): array
     {
         $setters = [];
         $method = new \ReflectionMethod($clientFullName, $rpcName);
@@ -152,17 +177,24 @@ class CustomFixer extends AbstractFixer
         if ($reflectionArg) {
             // handle array of optional args!
             if ($reflectionArg->getName() == 'optionalArgs') {
-                echo "TESTTTT";
-                return [];
+                // do nothing for now!
             }
         } else {
             // throw new \Exception('Could not find argument for ' . $clientFullName . '::' . $rpcName . ' at index ' . $argIndex);
         }
 
-        foreach ($argument as $argTokens) {
-            if ($argTokens->isGivenKind(T_VARIABLE)) {
-                $varName = $argTokens->getContent();
-                $setters[] = ['set' . ucfirst(substr($varName, 1)), $varName];
+        foreach ($argumentTokens as $argToken) {
+            if ($argToken->isGivenKind(T_VARIABLE)) {
+                // Simple variable argument!
+                $varName = $argToken->getContent();
+                $setterName = 'set' . ucfirst(substr($varName, 1));
+                // use reflection when applicable to be sure we have the right setter name
+                if ($reflectionArg && $reflectionArg->getName() !== 'optionalArgs') {
+                    $setterName = 'set' . ucfirst($reflectionArg->getName());
+                }
+                $setters[] = [$setterName, $varName];
+            } elseif ($reflectionArg && $reflectionArg->getName() == 'optionalArgs') {
+                //
             }
         }
 
