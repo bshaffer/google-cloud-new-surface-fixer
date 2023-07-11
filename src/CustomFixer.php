@@ -13,7 +13,7 @@ use PhpCsFixer\Tokenizer\Tokens;
 
 class CustomFixer extends AbstractFixer
 {
-        /**
+    /**
      * Check if the fixer is a candidate for given Tokens collection.
      *
      * Fixer is a candidate when the collection contains tokens that may be fixed
@@ -27,25 +27,16 @@ class CustomFixer extends AbstractFixer
         return true;
     }
 
-    /**
-     * Check if fixer is risky or not.
-     *
-     * Risky fixer could change code behavior!
-     */
-    public function isRisky(): bool
-    {
-        return false;
-    }
-
     protected function applyFix(\SplFileInfo $file, Tokens $tokens): void
     {
         $useDeclarations = (new NamespaceUsesAnalyzer())->getDeclarationsFromTokens($tokens);
+
         $clients = [];
         // Change to new namespace
         foreach ($tokens->getNamespaceDeclarations() as $namespace) {
             foreach ($useDeclarations as $useDeclaration) {
                 if (
-                    0 === strpos($useDeclaration->getFullName(), 'Google\\Cloud\\')
+                    0 === strpos($useDeclaration->getFullName(), 'Google\\')
                     && 'Client' === substr($useDeclaration->getShortName(), -6)
                     && false === strpos($useDeclaration->getFullName(), '\\Client\\')
                 ) {
@@ -162,7 +153,11 @@ class CustomFixer extends AbstractFixer
         // Add the request namespaces
         $requestClassImports = [];
         foreach ($requestClasses as $requestClass) {
-            $requestClassImports[] = new Token([T_STRING, PHP_EOL . 'use ' . $requestClass . ';']);
+            $requestClassImports[] = new Token([T_WHITESPACE, PHP_EOL]);
+            $requestClassImports[] = new Token([T_USE, 'use']);
+            $requestClassImports[] = new Token([T_WHITESPACE, ' ']);
+            $requestClassImports[] = new Token([T_STRING, $requestClass]);
+            $requestClassImports[] = new Token(';');
         }
         $lastUse = array_pop($useDeclarations);
         $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
@@ -301,22 +296,12 @@ class CustomFixer extends AbstractFixer
     }
 
     /**
-     * Returns the priority of the fixer.
+     * {@inheritdoc}
      *
-     * The default priority is 0 and higher priorities are executed first.
+     * Must run before OrderedImportsFixer.
      */
     public function getPriority(): int
     {
         return 0;
-    }
-
-    /**
-     * Returns true if the file is supported by this fixer.
-     *
-     * @return bool true if the file is supported by this fixer, false otherwise
-     */
-    public function supports(\SplFileInfo $file): bool
-    {
-        return true;
     }
 }
