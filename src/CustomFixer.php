@@ -110,13 +110,18 @@ class CustomFixer extends AbstractFixer
                         // Add indent
                         $buildRequestTokens[] = new Token([T_STRING, PHP_EOL. PHP_EOL . $indent]);
                         $buildRequestTokens[] = new Token([T_STRING, $requestVarName . ' = (new ' . $requestShortName . '())']);
-                        foreach ($arguments as $argIndex => $argument) {
-                            foreach ($this->getSettersFromToken($clientFullName, $rpcName, $argIndex, $argument) as $setter) {
-                                list($method, $var) = $setter;
+                        $argIndex = 0;
+                        foreach ($arguments as $startIndex => $argument) {
+                            foreach ($this->getSettersFromToken($tokens, $clientFullName, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
+                                list($method, $varTokens) = $setter;
                                 $buildRequestTokens[] = new Token([T_STRING, PHP_EOL . $indent . $indent]); // whitespace
                                 $buildRequestTokens[] = new Token([T_STRING, '->' . $method]);   // setter method
-                                $buildRequestTokens[] = new Token([T_STRING, '(' . $var . ')']); // setter value
+                                // setter value
+                                $buildRequestTokens[] = new Token([T_STRING, '(']);
+                                $buildRequestTokens = array_merge($buildRequestTokens, $varTokens);
+                                $buildRequestTokens[] = new Token([T_STRING, ')']);
                             }
+                            $argIndex++;
                         }
                         $buildRequestTokens[] = new Token([T_STRING, ';']);
                         $buildRequestTokens[] = new Token([T_STRING, PHP_EOL . $indent]);
@@ -163,34 +168,45 @@ class CustomFixer extends AbstractFixer
         $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
     }
 
-    private function getSettersFromToken(string $clientFullName, string $rpcName, int $argIndex, array $argumentTokens): array
+    private function getSettersFromToken($tokens, string $clientFullName, string $rpcName, int $startIndex, int $argIndex, array $argumentTokens): array
     {
         $setters = [];
+        $setterName = null;
         $method = new \ReflectionMethod($clientFullName, $rpcName);
         $params = $method->getParameters();
         $reflectionArg = $params[$argIndex] ?? null;
         if ($reflectionArg) {
             // handle array of optional args!
             if ($reflectionArg->getName() == 'optionalArgs') {
-                // do nothing for now!
+                $arrayStart = $tokens->getNextMeaningfulToken($startIndex);
+                if ($tokens[$arrayStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+                    $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $arrayStart);
+                    $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $arrayStart, $closeIndex);
+                    $prevStart = $arrayStart;
+                    foreach ($arrayEntries as $doubleArrowIndex => $token) {
+                        $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
+                        if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
+                            $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
+                            $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
+                            $valueEnd = min($tokens->getNextTokenOfKind($doubleArrowIndex + 1, [',']) ?: $closeIndex, $closeIndex);
+                            $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
+                            // Remove leading whitespace
+                            for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
+                                unset($varTokens[$i]);
+                            }
+                            $setters[] = [$setterName, $varTokens];
+                            $prevStart = $valueEnd;
+                        }
+                    }
+                }
+                // if an array is being passed in, use the keys to determine the setters
+            } else {
+                // Just place the argument tokens in a setter
+                $setterName = 'set' . ucfirst($reflectionArg->getName());
+                return [[$setterName, $argumentTokens]];
             }
         } else {
-            // throw new \Exception('Could not find argument for ' . $clientFullName . '::' . $rpcName . ' at index ' . $argIndex);
-        }
-
-        foreach ($argumentTokens as $argToken) {
-            if ($argToken->isGivenKind(T_VARIABLE)) {
-                // Simple variable argument!
-                $varName = $argToken->getContent();
-                $setterName = 'set' . ucfirst(substr($varName, 1));
-                // use reflection when applicable to be sure we have the right setter name
-                if ($reflectionArg && $reflectionArg->getName() !== 'optionalArgs') {
-                    $setterName = 'set' . ucfirst($reflectionArg->getName());
-                }
-                $setters[] = [$setterName, $varName];
-            } elseif ($reflectionArg && $reflectionArg->getName() == 'optionalArgs') {
-                //
-            }
+            throw new \Exception('Could not find argument for ' . $clientFullName . '::' . $rpcName . ' at index ' . $argIndex);
         }
 
         return $setters;
@@ -211,7 +227,7 @@ class CustomFixer extends AbstractFixer
                     $argumentTokens[] = $tokens[$i];
                 }
 
-                $arguments[] = $argumentTokens;
+                $arguments[$nextIndex] = $argumentTokens;
                 $nextIndex = $tokens->getNextMeaningfulToken($nextArgumentEnd);
                 $nextArgumentEnd = $this->getNextArgumentEnd($tokens, $nextIndex);
             }
@@ -251,6 +267,7 @@ class CustomFixer extends AbstractFixer
             [T_NS_SEPARATOR],
             [T_STATIC],
             [T_STRING],
+            [T_CONSTANT_ENCAPSED_STRING],
             [T_VARIABLE],
         ])) {
             $blockType = Tokens::detectBlockType($nextToken);

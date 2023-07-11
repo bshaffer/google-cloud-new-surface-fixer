@@ -39,12 +39,27 @@ function deidentify_exception_list(
 ): void {
     // Instantiate a client.
     $dlp = new DlpServiceClient();
-    $infoTypes = $dlp->listInfoTypes();     // no args
-    $dlp->listInfoTypes($foo); // optional args array (variable form)
-    $dlp->createDlpJob($foo);  // required args variable
-    $dlp->createDlpJob('this/is/a/parent');  // required args string
-    $dlp->createDlpJob($foo, ['baz' => 1, 'qux' => 2]); // required args variable and array
-    $dlp->createDlpJob($foo, $bar); // required args variable and array variable
+
+    // no args
+    // $infoTypes = $dlp->listInfoTypes();
+
+    // optional args array (variable form)
+    // $dlp->listInfoTypes($foo);
+
+    // required args variable
+    // $dlp->createDlpJob($foo);
+
+    // required args string
+    $dlp->createDlpJob('this/is/a/parent');
+
+    // required args array
+    $dlp->createDlpJob(['baz' => 1, 'qux' => 2]);
+
+    // required args variable and array
+    $dlp->createDlpJob($foo, ['baz' => 1, 'qux' => 2]);
+
+    // required args variable and array variable
+    // $dlp->createDlpJob($foo, $bar);
 
     // Send the request and receive response from the service
     // $response = $dlp->deidentifyContent($request);
