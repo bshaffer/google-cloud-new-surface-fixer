@@ -108,8 +108,18 @@ class CustomFixer extends AbstractFixer
 
                         // initiate $request variable
                         // Add indent
-                        $buildRequestTokens[] = new Token([T_STRING,  PHP_EOL . $indent]);
-                        $buildRequestTokens[] = new Token([T_STRING, $requestVarName . ' = (new ' . $requestShortName . '())']);
+                        $buildRequestTokens[] = new Token([T_WHITESPACE,  PHP_EOL . $indent]);
+                        $buildRequestTokens[] = new Token([T_VARIABLE, $requestVarName]);
+                        $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
+                        $buildRequestTokens[] = new Token('=');
+                        $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
+                        $buildRequestTokens[] = new Token('(');
+                        $buildRequestTokens[] = new Token([T_NEW, 'new']);
+                        $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
+                        $buildRequestTokens[] = new Token([T_STRING, $requestShortName]);
+                        $buildRequestTokens[] = new Token('(');
+                        $buildRequestTokens[] = new Token(')');
+                        $buildRequestTokens[] = new Token(')');
                         $argIndex = 0;
                         foreach ($arguments as $startIndex => $argument) {
                             foreach ($this->getSettersFromToken($tokens, $clientFullName, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
@@ -130,15 +140,13 @@ class CustomFixer extends AbstractFixer
                         $tokens->insertAt($lineStart, $buildRequestTokens);
 
                         // Replace the arguments with $request
-                        if ($lastIndex - $firstIndex > 1) {
-                            $tokens->overrideRange(
-                                $firstIndex + 1 + count($buildRequestTokens),
-                                $lastIndex - 1 + count($buildRequestTokens),
-                                [
-                                    new Token([T_VARIABLE, $requestVarName]),
-                                ]
-                            );
-                        }
+                        $tokens->overrideRange(
+                            $firstIndex + 1 + count($buildRequestTokens),
+                            $lastIndex - 1 + count($buildRequestTokens),
+                            [
+                                new Token([T_VARIABLE, $requestVarName]),
+                            ]
+                        );
                         $index = $firstIndex + 1 + count($buildRequestTokens);
                     }
                 }
@@ -183,14 +191,34 @@ class CustomFixer extends AbstractFixer
                 if ($tokens[$arrayStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
                     $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $arrayStart);
                     $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $arrayStart, $closeIndex);
+                    $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $arrayStart + 1, $closeIndex);
+
+                    // skip nested arrays
+                    foreach ($arrayEntries as $doubleArrowIndex => $doubleArrowIndexToken) {
+                        foreach ($nestedArrays as $nestedArrayIndex => $nestedArrayIndexToken) {
+                            $nestedArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $nestedArrayIndex);
+                            if ($doubleArrowIndex > $nestedArrayIndex && $doubleArrowIndex < $nestedArrayCloseIndex) {
+                                unset($arrayEntries[$doubleArrowIndex]);
+                            }
+                        }
+                    }
+
+                    // Add a setter for each top-level array entry
+                    $arrayEntryIndices = array_keys($arrayEntries);
                     $prevStart = $arrayStart;
-                    foreach ($arrayEntries as $doubleArrowIndex => $token) {
+                    foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
                         $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
                         if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
                             $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
                             $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
-                            $valueEnd = min($tokens->getNextTokenOfKind($doubleArrowIndex + 1, [',']) ?: $closeIndex, $closeIndex);
+                            $valueEnd = isset($arrayEntryIndices[$i+1])
+                                ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
+                                : $closeIndex;
                             $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
+                            // Remove trailing whitespace
+                            for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
+                                unset($varTokens[$i]);
+                            }
                             // Remove leading whitespace
                             for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
                                 unset($varTokens[$i]);

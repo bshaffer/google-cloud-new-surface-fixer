@@ -41,13 +41,13 @@ function deidentify_exception_list(
     $dlp = new DlpServiceClient();
 
     // no args
-    // $infoTypes = $dlp->listInfoTypes();
+    $infoTypes = $dlp->listInfoTypes();
 
     // optional args array (variable form)
-    // $dlp->listInfoTypes($foo);
+    $dlp->listInfoTypes($foo);
 
     // required args variable
-    // $dlp->createDlpJob($foo);
+    $dlp->createDlpJob($foo);
 
     // required args string
     $dlp->createDlpJob('this/is/a/parent');
@@ -55,17 +55,31 @@ function deidentify_exception_list(
     // required args array
     $dlp->createDlpJob(['baz' => 1, 'qux' => 2]);
 
-    // required args variable and array
+    // required args variable and optional args array
     $dlp->createDlpJob($foo, ['baz' => 1, 'qux' => 2]);
 
-    // required args variable and array variable
-    // $dlp->createDlpJob($foo, $bar);
+    // required args variable and optional args variable
+    $dlp->createDlpJob($foo, $bar);
+
+    // required args variable and optional args array with nested array
+    $dlp->createDlpJob($foo, [
+        'inspectJob' => new InspectJobConfig([
+            'actions' => ['action1', 'action2'],
+            'storage_config' => new StorageConfig([
+                'foo' => 'foo',
+                'bar' => 'bar',
+            ]),
+            'datastore_options' => (new DatastoreOptions())
+                ->setPartitionId(123)
+                ->setKind('dlp'),
+        ])
+    ]);
 
     // Send the request and receive response from the service
-    // $response = $dlp->deidentifyContent($request);
+    $response = $dlp->deidentifyContent($request);
 
     // Print the results
-    // printf('Text after replace with infotype config: %s', $response->getItem()->getValue());
+    printf('Text after replace with infotype config: %s', $response->getItem()->getValue());
 }
 # [END dlp_deidentify_exception_list]
 
