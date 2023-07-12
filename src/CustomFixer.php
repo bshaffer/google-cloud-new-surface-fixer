@@ -108,23 +108,24 @@ class CustomFixer extends AbstractFixer
 
                         // initiate $request variable
                         // Add indent
-                        $buildRequestTokens[] = new Token([T_STRING, PHP_EOL. PHP_EOL . $indent]);
+                        $buildRequestTokens[] = new Token([T_STRING,  PHP_EOL . $indent]);
                         $buildRequestTokens[] = new Token([T_STRING, $requestVarName . ' = (new ' . $requestShortName . '())']);
                         $argIndex = 0;
                         foreach ($arguments as $startIndex => $argument) {
                             foreach ($this->getSettersFromToken($tokens, $clientFullName, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
                                 list($method, $varTokens) = $setter;
-                                $buildRequestTokens[] = new Token([T_STRING, PHP_EOL . $indent . $indent]); // whitespace
-                                $buildRequestTokens[] = new Token([T_STRING, '->' . $method]);   // setter method
+                                // whitespace (assume 4 spaces)
+                                $buildRequestTokens[] = new Token([T_WHITESPACE, PHP_EOL . $indent . '    ']);
+                                // setter method
+                                $buildRequestTokens[] = new Token([T_OBJECT_OPERATOR, '->' . $method]);
                                 // setter value
-                                $buildRequestTokens[] = new Token([T_STRING, '(']);
+                                $buildRequestTokens[] = new Token('(');
                                 $buildRequestTokens = array_merge($buildRequestTokens, $varTokens);
-                                $buildRequestTokens[] = new Token([T_STRING, ')']);
+                                $buildRequestTokens[] = new Token(')');
                             }
                             $argIndex++;
                         }
-                        $buildRequestTokens[] = new Token([T_STRING, ';']);
-                        $buildRequestTokens[] = new Token([T_STRING, PHP_EOL . $indent]);
+                        $buildRequestTokens[] = new Token(';');
 
                         $tokens->insertAt($lineStart, $buildRequestTokens);
 
@@ -134,7 +135,7 @@ class CustomFixer extends AbstractFixer
                                 $firstIndex + 1 + count($buildRequestTokens),
                                 $lastIndex - 1 + count($buildRequestTokens),
                                 [
-                                    new Token([T_STRING, $requestVarName]),
+                                    new Token([T_VARIABLE, $requestVarName]),
                                 ]
                             );
                         }
@@ -219,7 +220,7 @@ class CustomFixer extends AbstractFixer
         $lastIndex = null;
         if ($tokens[$nextIndex]->getContent() == '(') {
             $startIndex = $nextIndex;
-            $lastIndex = $tokens->findBlockEnd(TOKENS::BLOCK_TYPE_PARENTHESIS_BRACE, $nextIndex);
+            $lastIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $nextIndex);
             $nextArgumentEnd = $this->getNextArgumentEnd($tokens, $nextIndex);
             while ($nextArgumentEnd != $nextIndex) {
                 $argumentTokens = [];
