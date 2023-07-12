@@ -35,13 +35,19 @@ class CustomFixer extends AbstractFixer
         // Change to new namespace
         foreach ($tokens->getNamespaceDeclarations() as $namespace) {
             foreach ($useDeclarations as $useDeclaration) {
+                $clientClass = $useDeclaration->getFullName();
                 if (
-                    0 === strpos($useDeclaration->getFullName(), 'Google\\')
+                    0 === strpos($clientClass, 'Google\\')
                     && 'Client' === substr($useDeclaration->getShortName(), -6)
-                    && false === strpos($useDeclaration->getFullName(), '\\Client\\')
+                    && false === strpos($clientClass, '\\Client\\')
+                    && class_exists($clientClass)
                 ) {
-                    $clients[$useDeclaration->getFullName()] = $useDeclaration->getShortName();
-                    $this->replaceOldClientNamespaceWithNewClientNamespace($tokens, $useDeclaration);
+                    $parentClass = get_parent_class($clientClass);
+                    if (false !== strpos($parentClass, '\Gapic\\')) {
+                        echo "YAY";
+                        $clients[$useDeclaration->getFullName()] = $useDeclaration->getShortName();
+                        $this->replaceOldClientNamespaceWithNewClientNamespace($tokens, $useDeclaration);
+                    }
                 }
             }
         }

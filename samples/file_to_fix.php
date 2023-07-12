@@ -24,8 +24,8 @@
 
 namespace Google\Cloud\Samples\Dlp;
 
-# [START dlp_deidentify_exception_list]
 use Google\Cloud\Dlp\V2\DlpServiceClient;
+use Google\Cloud\PubSub\PubSubClient;
 
 /**
  * Create an exception list for de-identification
