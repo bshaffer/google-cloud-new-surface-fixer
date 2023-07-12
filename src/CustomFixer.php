@@ -44,7 +44,6 @@ class CustomFixer extends AbstractFixer
                 ) {
                     $parentClass = get_parent_class($clientClass);
                     if (false !== strpos($parentClass, '\Gapic\\')) {
-                        echo "YAY";
                         $clients[$useDeclaration->getFullName()] = $useDeclaration->getShortName();
                         $this->replaceOldClientNamespaceWithNewClientNamespace($tokens, $useDeclaration);
                     }
