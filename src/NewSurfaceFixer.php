@@ -1,6 +1,6 @@
 <?php
 
-namespace TestFixer;
+namespace Google\Cloud\Tools;
 
 use PhpCsFixer\AbstractFixer;
 use PhpCsFixer\Fixer\FixerInterface;
@@ -11,7 +11,7 @@ use PhpCsFixer\Tokenizer\CT;
 use PhpCsFixer\Tokenizer\Token;
 use PhpCsFixer\Tokenizer\Tokens;
 
-class CustomFixer extends AbstractFixer
+class NewSurfaceFixer extends AbstractFixer
 {
     /**
      * Check if the fixer is a candidate for given Tokens collection.
@@ -237,6 +237,10 @@ class CustomFixer extends AbstractFixer
             } else {
                 // Just place the argument tokens in a setter
                 $setterName = 'set' . ucfirst($reflectionArg->getName());
+                // Remove leading whitespace
+                for ($i = 0; $argumentTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
+                    unset($argumentTokens[$i]);
+                }
                 return [[$setterName, $argumentTokens]];
             }
         } else {

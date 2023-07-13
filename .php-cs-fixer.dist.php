@@ -3,10 +3,11 @@
 return (new PhpCsFixer\Config())
     // ...
     ->registerCustomFixers([
-        new TestFixer\CustomFixer(),
+        new Google\Cloud\Tools\NewSurfaceFixer(),
     ])
     ->setRules([
         // ...
         'TestFixer/custom_fixer' => true,
+        'ordered_imports' => true,
     ])
 ;
