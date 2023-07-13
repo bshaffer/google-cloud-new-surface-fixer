@@ -13,9 +13,9 @@ $dlp = new DlpServiceClient();
 $jobName = $dlp->dlpJobName('my-project', 'my-job');
 
 // Call an RPC method
-$request2 = (new GetDlpJobRequest())
+$request = (new GetDlpJobRequest())
     ->setName($jobName);
-$job = $dlp->getDlpJob($request2);
+$job = $dlp->getDlpJob($request);
 
 // Call a non-existant method!
 $job = $dlp->getJob($jobName);

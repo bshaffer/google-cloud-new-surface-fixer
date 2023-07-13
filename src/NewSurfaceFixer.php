@@ -99,14 +99,15 @@ class NewSurfaceFixer extends AbstractFixer
                     $nextIndex = $tokens->getNextMeaningfulToken($index);
                     $nextToken = $tokens[$nextIndex];
                     if ($nextToken->isGivenKind(T_OBJECT_OPERATOR)) {
-                        $rpcCallCount++;
+                        // Get the method being called by the client variable
                         $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
                         $nextToken = $tokens[$nextIndex];
                         $clientFullName = array_search($token->getContent(), $clientVars);
                         [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
                         $rpcName = $nextToken->getContent();
                         $requestShortName = ucfirst($rpcName) . 'Request';
-                        // Verify that the RPC exists
+
+                        // Verify that a Request class exists for that method
                         $parts = explode('\\', $clientFullName);
                         array_pop($parts); // remove client name to get namespace
                         $namespace = implode('\\', $parts);
@@ -115,7 +116,7 @@ class NewSurfaceFixer extends AbstractFixer
                             // If the Request class doesn't exist, assume this isn't an RPC method
                             continue;
                         }
-
+                        $rpcCallCount++;
                         $requestClasses[] = $requestClass;
 
                         // determine the indent
