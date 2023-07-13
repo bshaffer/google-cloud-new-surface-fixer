@@ -350,7 +350,7 @@ class NewSurfaceFixer extends AbstractFixer
      */
     public function getName(): string
     {
-        return 'TestFixer/custom_fixer';
+        return 'GoogleCloud/new_surface_fixer';
     }
 
     /**

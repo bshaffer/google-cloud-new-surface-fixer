@@ -7,7 +7,7 @@ return (new PhpCsFixer\Config())
     ])
     ->setRules([
         // ...
-        'TestFixer/custom_fixer' => true,
+        'GoogleCloud/new_surface_fixer' => true,
         'ordered_imports' => true,
     ])
 ;
