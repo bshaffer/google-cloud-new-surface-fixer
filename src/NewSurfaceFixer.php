@@ -89,7 +89,7 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         // Find the RPC methods being called on the clients
-        $rpcCalls = [];
+        $requestClasses = [];
         $rpcCallCount = 0;
         for ($index = 0; $index < count($tokens); $index++) {
             $token = $tokens[$index];
@@ -106,8 +106,17 @@ class NewSurfaceFixer extends AbstractFixer
                         [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
                         $rpcName = $nextToken->getContent();
                         $requestShortName = ucfirst($rpcName) . 'Request';
-                        $rpcCalls[] = [$clientFullName, $requestShortName];
-                        $clientShortName = $clients[$clientFullName];
+                        // Verify that the RPC exists
+                        $parts = explode('\\', $clientFullName);
+                        array_pop($parts); // remove client name to get namespace
+                        $namespace = implode('\\', $parts);
+                        $requestClass = sprintf('%s\\%s', $namespace, $requestShortName);
+                        if (!class_exists($requestClass)) {
+                            // If the Request class doesn't exist, assume this isn't an RPC method
+                            continue;
+                        }
+
+                        $requestClasses[] = $requestClass;
 
                         // determine the indent
                         $indent = '';
@@ -175,20 +184,9 @@ class NewSurfaceFixer extends AbstractFixer
             }
         }
 
-        // Find all request classes to import
-        $requestClasses = [];
-        foreach ($rpcCalls as $rpcCall) {
-            [$clientFullName, $requestShortName] = $rpcCall;
-            $parts = explode('\\', $clientFullName);
-            array_pop($parts); // remove client name to get namespace
-            $namespace = implode('\\', $parts);
-            $requestClasses[] = sprintf('%s\\%s', $namespace, $requestShortName);
-        }
-        $requestClasses = array_unique($requestClasses);
-
         // Add the request namespaces
         $requestClassImports = [];
-        foreach ($requestClasses as $requestClass) {
+        foreach (array_unique($requestClasses) as $requestClass) {
             $requestClassImports[] = new Token([T_WHITESPACE, PHP_EOL]);
             $requestClassImports[] = new Token([T_USE, 'use']);
             $requestClassImports[] = new Token([T_WHITESPACE, ' ']);
@@ -203,65 +201,69 @@ class NewSurfaceFixer extends AbstractFixer
     {
         $setters = [];
         $setterName = null;
-        $method = new \ReflectionMethod($clientFullName, $rpcName);
-        $params = $method->getParameters();
-        $reflectionArg = $params[$argIndex] ?? null;
-        if ($reflectionArg) {
-            // handle array of optional args!
-            if ($reflectionArg->getName() == 'optionalArgs') {
-                $arrayStart = $tokens->getNextMeaningfulToken($startIndex);
-                if ($tokens[$arrayStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
-                    $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $arrayStart);
-                    $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $arrayStart, $closeIndex);
-                    $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $arrayStart + 1, $closeIndex);
+        if (method_exists($clientFullName, $rpcName)) {
+            $method = new \ReflectionMethod($clientFullName, $rpcName);
+            $params = $method->getParameters();
+            $reflectionArg = $params[$argIndex] ?? null;
+            if ($reflectionArg) {
+                // handle array of optional args!
+                if ($reflectionArg->getName() == 'optionalArgs') {
+                    $arrayStart = $tokens->getNextMeaningfulToken($startIndex);
+                    if ($tokens[$arrayStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+                        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $arrayStart);
+                        $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $arrayStart, $closeIndex);
+                        $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $arrayStart + 1, $closeIndex);
 
-                    // skip nested arrays
-                    foreach ($arrayEntries as $doubleArrowIndex => $doubleArrowIndexToken) {
-                        foreach ($nestedArrays as $nestedArrayIndex => $nestedArrayIndexToken) {
-                            $nestedArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $nestedArrayIndex);
-                            if ($doubleArrowIndex > $nestedArrayIndex && $doubleArrowIndex < $nestedArrayCloseIndex) {
-                                unset($arrayEntries[$doubleArrowIndex]);
+                        // skip nested arrays
+                        foreach ($arrayEntries as $doubleArrowIndex => $doubleArrowIndexToken) {
+                            foreach ($nestedArrays as $nestedArrayIndex => $nestedArrayIndexToken) {
+                                $nestedArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $nestedArrayIndex);
+                                if ($doubleArrowIndex > $nestedArrayIndex && $doubleArrowIndex < $nestedArrayCloseIndex) {
+                                    unset($arrayEntries[$doubleArrowIndex]);
+                                }
+                            }
+                        }
+
+                        // Add a setter for each top-level array entry
+                        $arrayEntryIndices = array_keys($arrayEntries);
+                        $prevStart = $arrayStart;
+                        foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
+                            $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
+                            if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
+                                $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
+                                $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
+                                $valueEnd = isset($arrayEntryIndices[$i+1])
+                                    ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
+                                    : $closeIndex;
+                                $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
+                                // Remove trailing whitespace
+                                for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
+                                    unset($varTokens[$i]);
+                                }
+                                // Remove leading whitespace
+                                for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
+                                    unset($varTokens[$i]);
+                                }
+                                $setters[] = [$setterName, $varTokens];
+                                $prevStart = $valueEnd;
                             }
                         }
                     }
-
-                    // Add a setter for each top-level array entry
-                    $arrayEntryIndices = array_keys($arrayEntries);
-                    $prevStart = $arrayStart;
-                    foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
-                        $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
-                        if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
-                            $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
-                            $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
-                            $valueEnd = isset($arrayEntryIndices[$i+1])
-                                ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
-                                : $closeIndex;
-                            $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
-                            // Remove trailing whitespace
-                            for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
-                                unset($varTokens[$i]);
-                            }
-                            // Remove leading whitespace
-                            for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
-                                unset($varTokens[$i]);
-                            }
-                            $setters[] = [$setterName, $varTokens];
-                            $prevStart = $valueEnd;
-                        }
+                    // if an array is being passed in, use the keys to determine the setters
+                } else {
+                    // Just place the argument tokens in a setter
+                    $setterName = 'set' . ucfirst($reflectionArg->getName());
+                    // Remove leading whitespace
+                    for ($i = 0; $argumentTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
+                        unset($argumentTokens[$i]);
                     }
+                    return [[$setterName, $argumentTokens]];
                 }
-                // if an array is being passed in, use the keys to determine the setters
             } else {
-                // Just place the argument tokens in a setter
-                $setterName = 'set' . ucfirst($reflectionArg->getName());
-                // Remove leading whitespace
-                for ($i = 0; $argumentTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
-                    unset($argumentTokens[$i]);
-                }
-                return [[$setterName, $argumentTokens]];
+                // print('Could not find argument for ' . $clientFullName . '::' . $rpcName . ' at index ' . $argIndex);
             }
         } else {
-            throw new \Exception('Could not find argument for ' . $clientFullName . '::' . $rpcName . ' at index ' . $argIndex);
+            // print('Could not find method ' . $clientFullName . '::' . $rpcName);
         }
 
         return $setters;
