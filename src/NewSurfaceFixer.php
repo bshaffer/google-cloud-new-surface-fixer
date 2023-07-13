@@ -341,7 +341,7 @@ class NewSurfaceFixer extends AbstractFixer
      */
     public function getDefinition(): FixerDefinitionInterface
     {
-        return new FixerDefinition('This is a custom fixer', []);
+        return new FixerDefinition('Upgrade code to the new Google Cloud PHP client surface', []);
     }
 
     /**
