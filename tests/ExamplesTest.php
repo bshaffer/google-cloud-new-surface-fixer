@@ -29,10 +29,16 @@ class ExamplesTest extends TestCase
         $this->fixer->fix($fileInfo, $tokens);
         $this->ordered->fix($fileInfo, $tokens);
         $code = $tokens->generateCode();
+        if (file_get_contents(str_replace('legacy_', 'new_', $filepath)) !== $code) {
+            if (getenv('UPDATE_FIXTURES=1')) {
+                file_put_contents(str_replace('legacy_', 'new_', $filepath), $code);
+                $this->markTestIncomplete('Updated fixtures');
+            }
+        }
         $this->assertStringEqualsFile(str_replace('legacy_', 'new_', $filepath), $code);
     }
 
-    public function provideLegacySamples()
+    public static function provideLegacySamples()
     {
         return array_map(
             fn ($file) => [basename($file)],

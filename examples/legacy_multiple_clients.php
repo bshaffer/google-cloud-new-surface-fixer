@@ -2,29 +2,27 @@
 
 namespace Google\Cloud\Samples\Dlp;
 
+// new client surface doesn't exist (yet)
+use Google\ApiCore\LongRunning\OperationsClient;
+// new client surface exists
 use Google\Cloud\Dlp\V2\DlpServiceClient;
-use Google\Cloud\Iam\V2\IamClient;
+// invalid client
+use Google\Cloud\Dlp\V2\NonexistentClient;
+// new client surface exists
+use Google\Cloud\SecretManager\V1\SecretManagerServiceClient;
+// new client surface won't exist (not a generator client)
+use Google\Cloud\Storage\StorageClient;
 
 // Instantiate a client.
 $dlp = new DlpServiceClient();
-$iam = new IamClient();
+$longrunning = new OperationsClient();
+$secretmanager = new SecretManagerServiceClient();
+$storage = new StorageClient();
 
-// optional args array (variable)
-$infoTypes = $dlp->listInfoTypes($foo);
+// these should update
+$infoTypes = $dlp->listInfoTypes();
+$secrets = $secretmanager->listSecrets('this/is/a/parent');
 
-// optional args array (inline array)
-$job = $dlp->createDlpJob($foo, ['baz' => 1, 'qux' => 2]);
-
-// optional args array (inline with nested arrays)
-$job = $dlp->createDlpJob($foo, [
-    'inspectJob' => new InspectJobConfig([
-        'actions' => ['action1', 'action2'],
-        'storage_config' => new StorageConfig([
-            'foo' => 'foo',
-            'bar' => 'bar',
-        ]),
-        'datastore_options' => (new DatastoreOptions())
-            ->setPartitionId(123)
-            ->setKind('dlp'),
-    ])
-]);
+// these should update
+$operations = $longrunning->listOperations();
+$serviceAccount = $storage->getServiceAccount();

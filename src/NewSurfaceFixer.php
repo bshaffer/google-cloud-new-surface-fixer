@@ -29,6 +29,12 @@ class NewSurfaceFixer extends AbstractFixer
 
     protected function applyFix(\SplFileInfo $file, Tokens $tokens): void
     {
+        if (!class_exists('Google\Auth\OAuth2')) {
+            throw new \LogicException(
+                'In order for Google\Cloud\NewSurfaceFixer to work, you must install the google '
+                . 'cloud client library and include its autoloader in .php-cs-fixer.dist.php'
+            );
+        }
         $useDeclarations = (new NamespaceUsesAnalyzer())->getDeclarationsFromTokens($tokens);
 
         $clients = [];
@@ -36,16 +42,27 @@ class NewSurfaceFixer extends AbstractFixer
         foreach ($tokens->getNamespaceDeclarations() as $namespace) {
             foreach ($useDeclarations as $useDeclaration) {
                 $clientClass = $useDeclaration->getFullName();
+                $clientShortName = $useDeclaration->getShortName();
                 if (
                     0 === strpos($clientClass, 'Google\\')
-                    && 'Client' === substr($useDeclaration->getShortName(), -6)
+                    && 'Client' === substr($clientShortName, -6)
                     && false === strpos($clientClass, '\\Client\\')
                     && class_exists($clientClass)
                 ) {
-                    $parentClass = get_parent_class($clientClass);
-                    if (false !== strpos($parentClass, '\Gapic\\')) {
-                        $clients[$useDeclaration->getFullName()] = $useDeclaration->getShortName();
-                        $this->replaceOldClientNamespaceWithNewClientNamespace($tokens, $useDeclaration);
+                    if (false !== strpos(get_parent_class($clientClass), '\Gapic\\')) {
+                        $parts = explode('\\', $clientClass);
+                        $shortName = array_pop($parts);
+                        $newClientName = implode('\\', $parts) . '\\Client\\' . $shortName;
+                        if (class_exists($newClientName)) {
+                            $clients[$clientClass] = $clientShortName;
+                            $tokens->overrideRange(
+                                $useDeclaration->getStartIndex(),
+                                $useDeclaration->getEndIndex(),
+                                [
+                                    new Token([T_STRING, 'use ' . $newClientName . ';']),
+                                ]
+                            );
+                        }
                     }
                 }
             }
@@ -272,20 +289,6 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         return [$arguments, $startIndex, $lastIndex];
-    }
-
-    private function replaceOldClientNamespaceWithNewClientNamespace(Tokens $tokens, NamespaceUseAnalysis $useDeclaration): void
-    {
-        $parts = explode('\\', $useDeclaration->getFullName());
-        $shortName = array_pop($parts);
-        $newFullName = implode('\\', $parts) . '\\Client\\' . $shortName;
-        $tokens->overrideRange(
-            $useDeclaration->getStartIndex(),
-            $useDeclaration->getEndIndex(),
-            [
-                new Token([T_STRING, 'use ' . $newFullName . ';']),
-            ]
-        );
     }
 
     private function getNextArgumentEnd(Tokens $tokens, int $index): int
