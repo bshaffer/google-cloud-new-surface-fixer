@@ -3,26 +3,30 @@
 namespace Google\Cloud\Samples\Dlp;
 
 use Google\Cloud\Dlp\V2\DlpServiceClient;
+use Google\Cloud\Dlp\V2\InspectConfig;
+use Google\Cloud\Dlp\V2\InspectJobConfig;
+use Google\Cloud\Dlp\V2\Likelihood;
+use Google\Cloud\Dlp\V2\StorageConfig;
 
 // Instantiate a client.
 $dlp = new DlpServiceClient();
 
 // optional args array (variable)
-$infoTypes = $dlp->listInfoTypes($foo);
+$infoTypes = $dlp->listInfoTypes($parent);
 
 // optional args array (inline array)
-$job = $dlp->createDlpJob($foo, ['baz' => 1, 'qux' => 2]);
+$job = $dlp->createDlpJob($parent, ['jobId' => 'abc', 'locationId' => 'def']);
 
 // optional args array (inline with nested arrays)
-$job = $dlp->createDlpJob($foo, [
+$job = $dlp->createDlpJob($parent, [
     'inspectJob' => new InspectJobConfig([
-        'actions' => ['action1', 'action2'],
-        'storage_config' => new StorageConfig([
-            'foo' => 'foo',
-            'bar' => 'bar',
-        ]),
-        'datastore_options' => (new DatastoreOptions())
-            ->setPartitionId(123)
-            ->setKind('dlp'),
+        'inspect_config' => (new InspectConfig())
+            ->setMinLikelihood(likelihood::LIKELIHOOD_UNSPECIFIED)
+            ->setLimits($limits)
+            ->setInfoTypes($infoTypes)
+            ->setIncludeQuote(true),
+        'storage_config' => (new StorageConfig())
+            ->setCloudStorageOptions(($cloudStorageOptions))
+            ->setTimespanConfig($timespanConfig),
     ])
 ]);

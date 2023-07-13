@@ -15,7 +15,7 @@ $dlp->createDlpJob($request);
 
 // required args inline array
 $request2 = (new CreateDlpJobRequest())
-    ->setParent(['baz' => 1, 'qux' => 2]);
+    ->setParent(['jobId' => 'abc', 'locationId' => 'def']);
 $dlp->createDlpJob($request2);
 
 // required args variable

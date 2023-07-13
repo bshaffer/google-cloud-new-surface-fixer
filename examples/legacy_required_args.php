@@ -11,7 +11,7 @@ $dlp = new DlpServiceClient();
 $dlp->createDlpJob('this/is/a/parent');
 
 // required args inline array
-$dlp->createDlpJob(['baz' => 1, 'qux' => 2]);
+$dlp->createDlpJob(['jobId' => 'abc', 'locationId' => 'def']);
 
 // required args variable
 $dlp->createDlpJob($foo);
