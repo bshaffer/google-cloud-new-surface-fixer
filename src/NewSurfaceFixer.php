@@ -194,8 +194,9 @@ class NewSurfaceFixer extends AbstractFixer
             $requestClassImports[] = new Token([T_STRING, $requestClass]);
             $requestClassImports[] = new Token(';');
         }
-        $lastUse = array_pop($useDeclarations);
-        $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
+        if ($lastUse = array_pop($useDeclarations)) {
+            $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
+        }
     }
 
     private function getSettersFromToken($tokens, string $clientFullName, string $rpcName, int $startIndex, int $argIndex, array $argumentTokens): array
