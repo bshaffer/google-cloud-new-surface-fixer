@@ -45,7 +45,7 @@ Run this fixer with the following command:
 
 ```sh
 export DIR=examples
-php-cs-fixer fix --config=.php-cs-fixer.google.php --dry-run --diff $DIR
+vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.google.php --dry-run --diff $DIR
 ```
 
 You should get an output similar to this
@@ -53,44 +53,49 @@ You should get an output similar to this
 ```diff
 --- examples/legacy_optional_args.php
 +++ examples/legacy_optional_args.php
-@@ -2,20 +2,28 @@
+@@ -2,10 +2,12 @@
 
  namespace Google\Cloud\Samples\Dlp;
 
 -use Google\Cloud\Dlp\V2\DlpServiceClient;
 +use Google\Cloud\Dlp\V2\Client\DlpServiceClient;
 +use Google\Cloud\Dlp\V2\CreateDlpJobRequest;
+ use Google\Cloud\Dlp\V2\InspectConfig;
+ use Google\Cloud\Dlp\V2\InspectJobConfig;
+ use Google\Cloud\Dlp\V2\Likelihood;
 +use Google\Cloud\Dlp\V2\ListInfoTypesRequest;
+ use Google\Cloud\Dlp\V2\StorageConfig;
 
  // Instantiate a client.
+@@ -12,14 +14,20 @@
  $dlp = new DlpServiceClient();
 
  // optional args array (variable)
--$infoTypes = $dlp->listInfoTypes($foo);
+-$infoTypes = $dlp->listInfoTypes($parent);
 +$request = (new ListInfoTypesRequest());
 +$infoTypes = $dlp->listInfoTypes($request);
 
  // optional args array (inline array)
--$job = $dlp->createDlpJob($foo, ['baz' => 1, 'qux' => 2]);
+-$job = $dlp->createDlpJob($parent, ['jobId' => 'abc', 'locationId' => 'def']);
 +$request2 = (new CreateDlpJobRequest())
-+    ->setParent($foo)
-+    ->setBaz(1)
-+    ->setQux(2);
++    ->setParent($parent)
++    ->setJobId('abc')
++    ->setLocationId('def');
 +$job = $dlp->createDlpJob($request2);
 
  // optional args array (inline with nested arrays)
--$job = $dlp->createDlpJob($foo, [
+-$job = $dlp->createDlpJob($parent, [
 -    'inspectJob' => new InspectJobConfig([
 +$request3 = (new CreateDlpJobRequest())
-+    ->setParent($foo)
++    ->setParent($parent)
 +    ->setInspectJob(new InspectJobConfig([
-         'actions' => ['action1', 'action2'],
-         'storage_config' => new StorageConfig([
-             'foo' => 'foo',
-@@ -24,5 +32,5 @@
-         'datastore_options' => (new DatastoreOptions())
-             ->setPartitionId(123)
-             ->setKind('dlp'),
+         'inspect_config' => (new InspectConfig())
+             ->setMinLikelihood(likelihood::LIKELIHOOD_UNSPECIFIED)
+             ->setLimits($limits)
+@@ -28,5 +36,5 @@
+         'storage_config' => (new StorageConfig())
+             ->setCloudStorageOptions(($cloudStorageOptions))
+             ->setTimespanConfig($timespanConfig),
 -    ])
 -]);
 +    ]));
