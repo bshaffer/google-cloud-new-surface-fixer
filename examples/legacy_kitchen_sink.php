@@ -45,5 +45,6 @@ $job = $dlp->createDlpJob($parent, [
         'storage_config' => (new StorageConfig())
             ->setCloudStorageOptions(($cloudStorageOptions))
             ->setTimespanConfig($timespanConfig),
-    ])
+    ]),
+    'trailingComma' => true,
 ]);

@@ -242,6 +242,10 @@ class NewSurfaceFixer extends AbstractFixer
                                 for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
                                     unset($varTokens[$i]);
                                 }
+                                // Remove trailing commas
+                                for ($i = count($varTokens)-1; $varTokens[$i]->getContent() === ','; $i--) {
+                                    unset($varTokens[$i]);
+                                }
                                 // Remove leading whitespace
                                 for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
                                     unset($varTokens[$i]);
