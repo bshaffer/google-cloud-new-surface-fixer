@@ -10,6 +10,8 @@ use PhpCsFixer\Tokenizer\Analyzer\Analysis\NamespaceUseAnalysis;
 use PhpCsFixer\Tokenizer\CT;
 use PhpCsFixer\Tokenizer\Token;
 use PhpCsFixer\Tokenizer\Tokens;
+use ReflectionClass;
+use ReflectionMethod;
 
 class NewSurfaceFixer extends AbstractFixer
 {
@@ -52,7 +54,7 @@ class NewSurfaceFixer extends AbstractFixer
                     if (false !== strpos(get_parent_class($clientClass), '\Gapic\\')) {
                         $parts = explode('\\', $clientClass);
                         $shortName = array_pop($parts);
-                        $newClientName = implode('\\', $parts) . '\\Client\\' . $shortName;
+                        $newClientName = $this->getNewClientClass($clientClass);
                         if (class_exists($newClientName)) {
                             $clients[$clientClass] = $clientShortName;
                             $tokens->overrideRange(
@@ -105,16 +107,22 @@ class NewSurfaceFixer extends AbstractFixer
                         $clientFullName = array_search($token->getContent(), $clientVars);
                         [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
                         $rpcName = $nextToken->getContent();
-                        $requestShortName = ucfirst($rpcName) . 'Request';
 
-                        // Verify that a Request class exists for that method
-                        $parts = explode('\\', $clientFullName);
-                        array_pop($parts); // remove client name to get namespace
-                        $namespace = implode('\\', $parts);
-                        $requestClass = sprintf('%s\\%s', $namespace, $requestShortName);
-                        if (!class_exists($requestClass)) {
-                            // If the Request class doesn't exist, assume this isn't an RPC method
+                        // Get the Request class name
+                        $newClientClass = $this->getNewClientClass($clientFullName);
+                        if (!method_exists($newClientClass, $rpcName)) {
+                            // If the method doesn't exist, there's nothing we can do
                             continue;
+                        }
+                        $method = new ReflectionMethod($newClientClass, $rpcName);
+                        $parameters = $method->getParameters();
+                        if (isset($parameters[0]) && $type = $parameters[0]->getType()) {
+                            if ($type->isBuiltin()) {
+                                // If the first parameter is a primitive type, assume this is a helper method
+                                continue;
+                            }
+                            $requestClass = $type->getName();
+                            $requestShortName = (new ReflectionClass($requestClass))->getShortName();
                         }
                         $rpcCallCount++;
                         $requestClasses[] = $requestClass;
@@ -199,12 +207,19 @@ class NewSurfaceFixer extends AbstractFixer
         }
     }
 
+    private function getNewClientClass(string $legacyClientClass)
+    {
+        $parts = explode('\\', $legacyClientClass);
+        $shortName = array_pop($parts);
+        return implode('\\', $parts) . '\\Client\\' . $shortName;
+    }
+
     private function getSettersFromToken($tokens, string $clientFullName, string $rpcName, int $startIndex, int $argIndex, array $argumentTokens): array
     {
         $setters = [];
         $setterName = null;
         if (method_exists($clientFullName, $rpcName)) {
-            $method = new \ReflectionMethod($clientFullName, $rpcName);
+            $method = new ReflectionMethod($clientFullName, $rpcName);
             $params = $method->getParameters();
             $reflectionArg = $params[$argIndex] ?? null;
             if ($reflectionArg) {
