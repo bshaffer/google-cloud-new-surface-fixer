@@ -11,6 +11,9 @@ $dlp = new DlpServiceClient();
 // Call a client method which is NOT an RPC
 $jobName = $dlp->dlpJobName('my-project', 'my-job');
 
+// Call the "close" method
+$job = $dlp->close();
+
 // Call an RPC method
 $job = $dlp->getDlpJob($jobName);
 

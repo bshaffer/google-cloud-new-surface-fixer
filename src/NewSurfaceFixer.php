@@ -116,15 +116,16 @@ class NewSurfaceFixer extends AbstractFixer
                         }
                         $method = new ReflectionMethod($newClientClass, $rpcName);
                         $parameters = $method->getParameters();
-                        if (isset($parameters[0]) && $type = $parameters[0]->getType()) {
-                            if ($type->isBuiltin()) {
-                                // If the first parameter is a primitive type, assume this is a helper method
-                                continue;
-                            }
-                            $requestClass = $type->getName();
-                            $requestShortName = (new ReflectionClass($requestClass))->getShortName();
+                        if (!isset($parameters[0]) || !$type = $parameters[0]->getType()) {
+                            continue;
+                        }
+                        if ($type->isBuiltin()) {
+                            // If the first parameter is a primitive type, assume this is a helper method
+                            continue;
                         }
                         $rpcCallCount++;
+                        $requestClass = $type->getName();
+                        $requestShortName = (new ReflectionClass($requestClass))->getShortName();
                         $requestClasses[] = $requestClass;
 
                         // determine the indent
