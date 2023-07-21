@@ -225,25 +225,15 @@ class NewSurfaceFixer extends AbstractFixer
             if ($reflectionArg) {
                 // handle array of optional args!
                 if ($reflectionArg->getName() == 'optionalArgs') {
-                    $arrayStart = $tokens->getNextMeaningfulToken($startIndex);
-                    if ($tokens[$arrayStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
-                        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $arrayStart);
-                        $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $arrayStart, $closeIndex);
-                        $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $arrayStart + 1, $closeIndex);
-
-                        // skip nested arrays
-                        foreach ($arrayEntries as $doubleArrowIndex => $doubleArrowIndexToken) {
-                            foreach ($nestedArrays as $nestedArrayIndex => $nestedArrayIndexToken) {
-                                $nestedArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $nestedArrayIndex);
-                                if ($doubleArrowIndex > $nestedArrayIndex && $doubleArrowIndex < $nestedArrayCloseIndex) {
-                                    unset($arrayEntries[$doubleArrowIndex]);
-                                }
-                            }
-                        }
+                    $argumentStart = $tokens->getNextMeaningfulToken($startIndex);
+                    if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+                        // If it's an inline array, use the keys to determine the setters
+                        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $argumentStart);
+                        $arrayEntries = $this->getSettersFromInlineArray($tokens, $argumentStart, $closeIndex);
 
                         // Add a setter for each top-level array entry
                         $arrayEntryIndices = array_keys($arrayEntries);
-                        $prevStart = $arrayStart;
+                        $prevStart = $argumentStart;
                         foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
                             $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
                             if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
@@ -270,7 +260,44 @@ class NewSurfaceFixer extends AbstractFixer
                             }
                         }
                     }
-                    // if an array is being passed in, use the keys to determine the setters
+                    elseif ($tokens[$argumentStart]->isGivenKind(T_VARIABLE)) {
+                        // if an array is being passed in, find where the array is defined and then do the same
+                        $optionalArgsVar = $tokens[$argumentStart]->getContent();
+                        for ($index = $argumentStart - 1; $index > 0; $index--) {
+                            $token = $tokens[$index];
+                            // Find where the optionalArgs variable is defined
+                            if ($token->isGivenKind(T_VARIABLE) && $token->getContent() == $optionalArgsVar) {
+                                $nextIndex = $tokens->getNextMeaningfulToken($index);
+                                if ($tokens[$nextIndex]->getContent() == '=') {
+                                    $argumentStart = $tokens->getNextMeaningfulToken($nextIndex);
+                                    if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+                                        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $argumentStart);
+                                        $arrayEntries = $this->getSettersFromInlineArray($tokens, $argumentStart, $closeIndex);
+                                        // Add a setter for each top-level array entry
+                                        $arrayEntryIndices = array_keys($arrayEntries);
+                                        $prevStart = $argumentStart;
+                                        foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
+                                            $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
+                                            if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
+                                                $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
+                                                $varTokens = [
+                                                    new Token([T_VARIABLE, $optionalArgsVar]),
+                                                    new Token([CT::T_ARRAY_SQUARE_BRACE_OPEN, '[']),
+                                                    clone $tokens[$keyIndex],
+                                                    new Token([CT::T_ARRAY_SQUARE_BRACE_CLOSE, ']']),
+                                                ];
+                                                $setters[] = [$setterName, $varTokens];
+                                                $valueEnd = isset($arrayEntryIndices[$i+1])
+                                                    ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
+                                                    : $closeIndex;
+                                                $prevStart = $valueEnd;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     // Just place the argument tokens in a setter
                     $setterName = 'set' . ucfirst($reflectionArg->getName());
@@ -288,6 +315,24 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         return $setters;
+    }
+
+    private function getSettersFromInlineArray(Tokens $tokens, int $argumentStart, int $closeIndex)
+    {
+        $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $argumentStart, $closeIndex);
+        $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $argumentStart + 1, $closeIndex);
+
+        // skip nested arrays
+        foreach ($arrayEntries as $doubleArrowIndex => $doubleArrowIndexToken) {
+            foreach ($nestedArrays as $nestedArrayIndex => $nestedArrayIndexToken) {
+                $nestedArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $nestedArrayIndex);
+                if ($doubleArrowIndex > $nestedArrayIndex && $doubleArrowIndex < $nestedArrayCloseIndex) {
+                    unset($arrayEntries[$doubleArrowIndex]);
+                }
+            }
+        }
+
+        return $arrayEntries;
     }
 
     private function getRpcCallArguments(Tokens $tokens, int $startIndex)
