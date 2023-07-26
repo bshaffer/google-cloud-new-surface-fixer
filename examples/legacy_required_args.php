@@ -10,6 +10,9 @@ $dlp = new DlpServiceClient();
 // required args string
 $dlp->createDlpJob('this/is/a/parent');
 
+// required args string (double quotes)
+$dlp->createDlpJob("this/is/a/$variable");
+
 // required args inline array
 $dlp->createDlpJob(['jobId' => 'abc', 'locationId' => 'def']);
 

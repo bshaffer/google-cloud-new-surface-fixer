@@ -430,6 +430,12 @@ class NewSurfaceFixer extends AbstractFixer
             return $this->getNextArgumentEnd($tokens, $tokens->getNextMeaningfulToken($nextIndex));
         }
 
+        if ('"' === $nextToken->getContent()) {
+            if ($endIndex = $tokens->getNextTokenOfKind($nextIndex + 1, ['"'])) {
+                return $endIndex;
+            }
+        }
+
         return $index;
     }
 
