@@ -239,7 +239,7 @@ class NewSurfaceFixer extends AbstractFixer
                 $this->getUseStatementTokensFromClassName($requestClass)
             );
         }
-        if ($lastUse = array_pop($useDeclarations)) {
+        if ($requestClassImports && $lastUse = array_pop($useDeclarations)) {
             $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
             // Ensure new imports are in the correct order
             $orderFixer = new OrderedImportsFixer();
