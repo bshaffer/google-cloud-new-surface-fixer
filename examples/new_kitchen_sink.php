@@ -21,42 +21,42 @@ use Google\Cloud\Unordered\Namespace;
 $dlp = new DlpServiceClient();
 
 // no args
-$request = (new ListInfoTypesRequest());
-$infoTypes = $dlp->listInfoTypes($request);
+$listInfoTypesRequest = (new ListInfoTypesRequest());
+$infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
 
 // optional args array (variable form)
-$request2 = (new ListInfoTypesRequest());
-$dlp->listInfoTypes($request2);
+$listInfoTypesRequest1 = (new ListInfoTypesRequest());
+$dlp->listInfoTypes($listInfoTypesRequest1);
 
 // required args variable
-$request3 = (new CreateDlpJobRequest())
+$createDlpJobRequest = (new CreateDlpJobRequest())
     ->setParent($foo);
-$dlp->createDlpJob($request3);
+$dlp->createDlpJob($createDlpJobRequest);
 
 // required args string
-$request4 = (new CreateDlpJobRequest())
+$createDlpJobRequest1 = (new CreateDlpJobRequest())
     ->setParent('this/is/a/parent');
-$dlp->createDlpJob($request4);
+$dlp->createDlpJob($createDlpJobRequest1);
 
 // required args array
-$request5 = (new CreateDlpJobRequest())
+$createDlpJobRequest2 = (new CreateDlpJobRequest())
     ->setParent(['jobId' => 'abc', 'locationId' => 'def']);
-$dlp->createDlpJob($request5);
+$dlp->createDlpJob($createDlpJobRequest2);
 
 // required args variable and optional args array
-$request6 = (new CreateDlpJobRequest())
+$createDlpJobRequest3 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setJobId('abc')
     ->setLocationId('def');
-$dlp->createDlpJob($request6);
+$dlp->createDlpJob($createDlpJobRequest3);
 
 // required args variable and optional args variable
-$request7 = (new CreateDlpJobRequest())
+$createDlpJobRequest4 = (new CreateDlpJobRequest())
     ->setParent($parent);
-$dlp->createDlpJob($request7);
+$dlp->createDlpJob($createDlpJobRequest4);
 
 // required args variable and optional args array with nested array
-$request8 = (new CreateDlpJobRequest())
+$createDlpJobRequest5 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob(new InspectJobConfig([
         'inspect_config' => (new InspectConfig())
@@ -69,7 +69,7 @@ $request8 = (new CreateDlpJobRequest())
             ->setTimespanConfig($timespanConfig),
     ]))
     ->setTrailingComma(true);
-$job = $dlp->createDlpJob($request8);
+$job = $dlp->createDlpJob($createDlpJobRequest5);
 
 $projectId = 'my-project';
 $secretId = 'my-secret';
@@ -81,7 +81,7 @@ $client = new SecretManagerServiceClient();
 $parent = $client->projectName($projectId);
 
 // Create the parent secret.
-$request9 = (new CreateSecretRequest())
+$createSecretRequest = (new CreateSecretRequest())
     ->setParent($parent)
     ->setSecretId($secretId)
     ->setSecret(new Secret([
@@ -89,4 +89,4 @@ $request9 = (new CreateSecretRequest())
             'automatic' => new Automatic(),
         ]),
     ]));
-$secret = $client->createSecret($request9);
+$secret = $client->createSecret($createSecretRequest);

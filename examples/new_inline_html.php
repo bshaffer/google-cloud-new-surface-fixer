@@ -25,9 +25,9 @@ function print_message(Message $message)
     );
 }
 
-$request = (new ListSecretsRequest())
+$listSecretsRequest = (new ListSecretsRequest())
     ->setParent($parent);
-$request2 = (new ListDlpJobsRequest())
+$listDlpJobsRequest = (new ListDlpJobsRequest())
     ->setParent($parent);
 ?>
 
@@ -39,14 +39,14 @@ $request2 = (new ListDlpJobsRequest())
         <div class="main-content">
             <h2 class="collapsible">List Secrets</h2>
             <div id="listSecrets" class="collapsible-content">
-                <?php foreach ($secretManagerClient->listSecrets($request) as $secret): ?>
+                <?php foreach ($secretManagerClient->listSecrets($listSecretsRequest) as $secret): ?>
                     <pre><?= print_message($secret) ?></pre>
                 <?php endforeach ?>
             </div>
 
             <h2 class="collapsible">List DLP Jobs</h2>
             <div id="listDlpJobs" class="collapsible-content">
-                <?php foreach ($dlpClient->listDlpJobs($request2) as $job): ?>
+                <?php foreach ($dlpClient->listDlpJobs($listDlpJobsRequest) as $job): ?>
                     <pre><?= print_message($job) ?></pre>
                 <?php endforeach ?>
             </div>

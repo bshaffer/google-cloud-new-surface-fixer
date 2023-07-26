@@ -10,9 +10,9 @@ use Google\Type\Expr;
 
 $secretManager = new SecretManagerServiceClient();
 $resource = sprintf('projects/%s/instances/%s/databases/%s', $projectId, $instanceId, $databaseId);
-$request = (new GetIamPolicyRequest())
+$getIamPolicyRequest = (new GetIamPolicyRequest())
     ->setResource($resource);
-$policy = $secretManager->getIamPolicy($request);
+$policy = $secretManager->getIamPolicy($getIamPolicyRequest);
 
 // IAM conditions need at least version 3
 if ($policy->getVersion() != 3) {
@@ -28,7 +28,7 @@ $binding = new Binding([
     ])
 ]);
 $policy->setBindings([$binding]);
-$request2 = (new SetIamPolicyRequest())
+$setIamPolicyRequest = (new SetIamPolicyRequest())
     ->setResource($resource)
     ->setPolicy($policy);
-$secretManager->setIamPolicy($request2);
+$secretManager->setIamPolicy($setIamPolicyRequest);

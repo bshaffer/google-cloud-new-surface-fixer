@@ -92,6 +92,7 @@ class NewSurfaceFixer extends AbstractFixer
         // Find the RPC methods being called on the clients
         $requestClasses = [];
         $rpcCallCount = 0;
+        $rpcCallCounts = [];
         $lastInsertEnd = null; // only used when inserting $request vars after use statements (for inline HTML)
         for ($index = 0; $index < count($tokens); $index++) {
             $token = $tokens[$index];
@@ -168,8 +169,16 @@ class NewSurfaceFixer extends AbstractFixer
                             // add a newline when adding just after use statements
                             $buildRequestTokens[] = new Token([T_WHITESPACE, PHP_EOL]);
                         }
+                        if (!isset($rpcCallCounts[$requestShortName])) {
+                            $rpcCallCounts[$requestShortName] = 0;
+                        }
                         // determine $request variable name depending on call count
-                        $requestVarName = '$request' . ($rpcCallCount == 1 ? '' : $rpcCallCount);
+                        $requestVarName = sprintf(
+                            '$%s%s',
+                            lcfirst($requestShortName),
+                            $rpcCallCounts[$requestShortName] ? $rpcCallCounts[$requestShortName] : ''
+                        );
+                        $rpcCallCounts[$requestShortName]++;
 
                         // Add the code for creating the $request variable and setting its properties
                         $buildRequestTokens[] = new Token([T_WHITESPACE,  PHP_EOL . $indent]);

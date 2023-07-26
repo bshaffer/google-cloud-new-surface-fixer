@@ -14,16 +14,16 @@ use Google\Cloud\Dlp\V2\StorageConfig;
 $dlp = new DlpServiceClient();
 
 // optional args array (variable)
-$request = (new ListInfoTypesRequest());
-$infoTypes = $dlp->listInfoTypes($request);
+$listInfoTypesRequest = (new ListInfoTypesRequest());
+$infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
 
 // optional args array (inline array)
 $options = ['jobId' => 'abc', 'locationId' => 'def'];
-$request2 = (new CreateDlpJobRequest())
+$createDlpJobRequest = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setJobId($options['jobId'])
     ->setLocationId($options['locationId']);
-$job = $dlp->createDlpJob($request2);
+$job = $dlp->createDlpJob($createDlpJobRequest);
 
 // optional args array (inline with nested arrays)
 $options2 = [
@@ -38,7 +38,7 @@ $options2 = [
             ->setTimespanConfig($timespanConfig),
     ])
 ];
-$request3 = (new CreateDlpJobRequest())
+$createDlpJobRequest1 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob($options2['inspectJob']);
-$job = $dlp->createDlpJob($request3);
+$job = $dlp->createDlpJob($createDlpJobRequest1);

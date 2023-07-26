@@ -22,11 +22,11 @@ $secretmanager = new SecretManagerServiceClient();
 $storage = new StorageClient();
 
 // these should update
-$request = (new ListInfoTypesRequest());
-$infoTypes = $dlp->listInfoTypes($request);
-$request2 = (new ListSecretsRequest())
+$listInfoTypesRequest = (new ListInfoTypesRequest());
+$infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
+$listSecretsRequest = (new ListSecretsRequest())
     ->setParent('this/is/a/parent');
-$secrets = $secretmanager->listSecrets($request2);
+$secrets = $secretmanager->listSecrets($listSecretsRequest);
 
 // these should update
 $operations = $longrunning->listOperations();

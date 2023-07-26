@@ -13,26 +13,26 @@ use Google\Cloud\Dlp\V2\StorageConfig;
 $dlp = new DlpServiceClient();
 
 // required args variable and optional args variable
-$request = (new CreateDlpJobRequest())
+$createDlpJobRequest = (new CreateDlpJobRequest())
     ->setParent($parent);
-$dlp->createDlpJob($request);
+$dlp->createDlpJob($createDlpJobRequest);
 
 // required args variable and optional args array
-$request2 = (new CreateDlpJobRequest())
+$createDlpJobRequest1 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setJobId('abc')
     ->setLocationId('def');
-$dlp->createDlpJob($request2);
+$dlp->createDlpJob($createDlpJobRequest1);
 
 // required args string and optional variable
-$request3 = (new CreateDlpJobRequest())
+$createDlpJobRequest2 = (new CreateDlpJobRequest())
     ->setParent('path/to/parent')
     ->setJobId('abc')
     ->setLocationId('def');
-$dlp->createDlpJob($request3);
+$dlp->createDlpJob($createDlpJobRequest2);
 
 // required args variable and optional args array with nested array
-$request4 = (new CreateDlpJobRequest())
+$createDlpJobRequest3 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob(new InspectJobConfig([
         'inspect_config' => (new InspectConfig())
@@ -44,4 +44,4 @@ $request4 = (new CreateDlpJobRequest())
             ->setCloudStorageOptions(($cloudStorageOptions))
             ->setTimespanConfig($timespanConfig),
     ]));
-$job = $dlp->createDlpJob($request4);
+$job = $dlp->createDlpJob($createDlpJobRequest3);
