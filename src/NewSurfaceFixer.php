@@ -4,6 +4,7 @@ namespace Google\Cloud\Tools;
 
 use PhpCsFixer\AbstractFixer;
 use PhpCsFixer\Fixer\FixerInterface;
+use PhpCsFixer\Fixer\Import\OrderedImportsFixer;
 use PhpCsFixer\FixerDefinition\FixerDefinitionInterface;
 use PhpCsFixer\Tokenizer\Analyzer\NamespaceUsesAnalyzer;
 use PhpCsFixer\Tokenizer\Analyzer\Analysis\NamespaceUseAnalysis;
@@ -60,9 +61,7 @@ class NewSurfaceFixer extends AbstractFixer
                             $tokens->overrideRange(
                                 $useDeclaration->getStartIndex(),
                                 $useDeclaration->getEndIndex(),
-                                [
-                                    new Token([T_STRING, 'use ' . $newClientName . ';']),
-                                ]
+                                $this->getUseStatementTokensFromClassName($newClientName)
                             );
                         }
                     }
@@ -198,13 +197,16 @@ class NewSurfaceFixer extends AbstractFixer
         $requestClassImports = [];
         foreach (array_unique($requestClasses) as $requestClass) {
             $requestClassImports[] = new Token([T_WHITESPACE, PHP_EOL]);
-            $requestClassImports[] = new Token([T_USE, 'use']);
-            $requestClassImports[] = new Token([T_WHITESPACE, ' ']);
-            $requestClassImports[] = new Token([T_STRING, $requestClass]);
-            $requestClassImports[] = new Token(';');
+            $requestClassImports = array_merge(
+                $requestClassImports,
+                $this->getUseStatementTokensFromClassName($requestClass)
+            );
         }
         if ($lastUse = array_pop($useDeclarations)) {
             $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
+            // Ensure new imports are in the correct order
+            $orderFixer = new OrderedImportsFixer();
+            $orderFixer->fix($file, $tokens);
         }
     }
 
@@ -400,6 +402,21 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         return $index;
+    }
+
+    private function getUseStatementTokensFromClassName(string $className): array
+    {
+        $tokens = [
+            new Token([T_USE, 'use']),
+            new Token([T_WHITESPACE, ' ']),
+        ];
+        foreach (explode('\'', $className) as $part) {
+            $tokens[] = new Token([T_STRING, $part]);
+            $tokens[] = new Token([T_NS_SEPARATOR, '\\']);
+        }
+        array_pop($tokens); // remove last namespace separator
+        $tokens[] = new Token(';');
+        return $tokens;
     }
 
     /**

@@ -4,7 +4,6 @@ namespace Google\Cloud\Tools\Fixer\Tests;
 
 use Google\Cloud\Tools\NewSurfaceFixer;
 use PhpCsFixer\Tokenizer\Tokens;
-use PhpCsFixer\Fixer\Import\OrderedImportsFixer;
 use PHPUnit\Framework\TestCase;
 use SplFileInfo;
 
@@ -15,7 +14,6 @@ class ExamplesTest extends TestCase
     public function setUp(): void
     {
         $this->fixer = new NewSurfaceFixer();
-        $this->ordered = new OrderedImportsFixer();
     }
 
     /**
@@ -27,7 +25,6 @@ class ExamplesTest extends TestCase
         $tokens = Tokens::fromCode(file_get_contents($filepath));
         $fileInfo = new SplFileInfo($filepath);
         $this->fixer->fix($fileInfo, $tokens);
-        $this->ordered->fix($fileInfo, $tokens);
         $code = $tokens->generateCode();
         if (file_get_contents(str_replace('legacy_', 'new_', $filepath)) !== $code) {
             if (getenv('UPDATE_FIXTURES=1')) {

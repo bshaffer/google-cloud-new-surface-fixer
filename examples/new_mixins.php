@@ -2,10 +2,10 @@
 
 namespace Google\Cloud\Samples\Dlp;
 
-use Google\Cloud\SecretManager\V1\Client\SecretManagerServiceClient;
 use Google\Cloud\Iam\V1\Binding;
 use Google\Cloud\Iam\V1\GetIamPolicyRequest;
 use Google\Cloud\Iam\V1\SetIamPolicyRequest;
+use Google\Cloud\SecretManager\V1\Client\SecretManagerServiceClient;
 use Google\Type\Expr;
 
 $secretManager = new SecretManagerServiceClient();
