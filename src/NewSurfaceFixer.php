@@ -92,6 +92,7 @@ class NewSurfaceFixer extends AbstractFixer
         // Find the RPC methods being called on the clients
         $requestClasses = [];
         $rpcCallCount = 0;
+        $lastInsertEnd = null; // only used when inserting $request vars after use statements (for inline HTML)
         for ($index = 0; $index < count($tokens); $index++) {
             $token = $tokens[$index];
             if ($token->isGivenKind(T_VARIABLE)) {
@@ -134,20 +135,41 @@ class NewSurfaceFixer extends AbstractFixer
                         while (
                             $clientStartIndex - $i >= 0
                             && false === strpos($tokens[$clientStartIndex - $i]->getContent(), "\n")
+                            && $tokens[$clientStartIndex - $i]->getId() !== T_OPEN_TAG
                         ) {
                             $i++;
                         }
+                        // Handle differently when we are dealing with inline PHP
+                        $newlineIsStartTag = $tokens[$clientStartIndex - $i]->getId() === T_OPEN_TAG;
+
                         if ($clientStartIndex - $i >= 0) {
-                            $lineStart = $clientStartIndex - $i;
-                            $indent = str_replace("\n", '', $tokens[$clientStartIndex - $i]->getContent());
+                            if ($newlineIsStartTag) {
+                                if (is_null($lastInsertEnd)) {
+                                    $useDeclarationEnd = $useDeclarations[count($useDeclarations) - 1]->getEndIndex() + 1;
+                                    if ($lastInsertEnd = $tokens->getNextTokenOfKind($useDeclarationEnd, ['?>', [T_CLOSE_TAG]])) {
+                                        $lastInsertEnd--;
+                                    } else {
+                                        // Fallback to after use statements (shouldn't ever happen)
+                                        $lastInsertEnd = $useDeclarationEnd;
+                                    }
+                                }
+                                $lineStart = $lastInsertEnd;
+                            } else {
+                                $lineStart = $clientStartIndex - $i;
+                                $indent = str_replace("\n", '', $tokens[$clientStartIndex - $i]->getContent());
+                            }
                         }
 
                         // Tokens for the "$request" variable
                         $buildRequestTokens = [];
+                        if ($newlineIsStartTag && $rpcCallCount == 1) {
+                            // add a newline when adding just after use statements
+                            $buildRequestTokens[] = new Token([T_WHITESPACE, PHP_EOL]);
+                        }
+                        // determine $request variable name depending on call count
                         $requestVarName = '$request' . ($rpcCallCount == 1 ? '' : $rpcCallCount);
 
-                        // initiate $request variable
-                        // Add indent
+                        // Add the code for creating the $request variable and setting its properties
                         $buildRequestTokens[] = new Token([T_WHITESPACE,  PHP_EOL . $indent]);
                         $buildRequestTokens[] = new Token([T_VARIABLE, $requestVarName]);
                         $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
@@ -178,6 +200,9 @@ class NewSurfaceFixer extends AbstractFixer
                         $buildRequestTokens[] = new Token(';');
 
                         $tokens->insertAt($lineStart, $buildRequestTokens);
+                        if ($newlineIsStartTag) {
+                            $lastInsertEnd = $lineStart + count($buildRequestTokens);
+                        }
 
                         // Replace the arguments with $request
                         $tokens->overrideRange(
