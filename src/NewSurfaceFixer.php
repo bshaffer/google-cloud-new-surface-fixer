@@ -105,7 +105,6 @@ class NewSurfaceFixer extends AbstractFixer
                         $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
                         $nextToken = $tokens[$nextIndex];
                         $clientFullName = array_search($token->getContent(), $clientVars);
-                        [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
                         $rpcName = $nextToken->getContent();
 
                         // Get the Request class name
@@ -127,6 +126,9 @@ class NewSurfaceFixer extends AbstractFixer
                         $requestClass = $type->getName();
                         $requestShortName = (new ReflectionClass($requestClass))->getShortName();
                         $requestClasses[] = $requestClass;
+
+                        // Get the arguments being passed to the RPC method
+                        [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
 
                         // determine the indent
                         $indent = '';
@@ -183,6 +185,7 @@ class NewSurfaceFixer extends AbstractFixer
                         $buildRequestTokens[] = new Token(')');
                         $buildRequestTokens[] = new Token(')');
                         $argIndex = 0;
+
                         foreach ($arguments as $startIndex => $argument) {
                             foreach ($this->getSettersFromToken($tokens, $clientFullName, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
                                 list($method, $varTokens) = $setter;
@@ -406,6 +409,7 @@ class NewSurfaceFixer extends AbstractFixer
             [T_STRING],
             [T_CONSTANT_ENCAPSED_STRING],
             [T_VARIABLE],
+            [T_NEW],
         ])) {
             $blockType = Tokens::detectBlockType($nextToken);
 

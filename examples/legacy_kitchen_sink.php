@@ -8,6 +8,10 @@ use Google\Cloud\Dlp\V2\InspectJobConfig;
 use Google\Cloud\Dlp\V2\Likelihood;
 use Google\Cloud\Dlp\V2\StorageConfig;
 use Google\Cloud\PubSub\PubSubClient;
+use Google\Cloud\SecretManager\V1\Replication;
+use Google\Cloud\SecretManager\V1\Replication\Automatic;
+use Google\Cloud\SecretManager\V1\Secret;
+use Google\Cloud\SecretManager\V1\SecretManagerServiceClient;
 use Google\Cloud\Unordered\Namespace;
 
 // Instantiate a client.
@@ -48,3 +52,21 @@ $job = $dlp->createDlpJob($parent, [
     ]),
     'trailingComma' => true,
 ]);
+
+$projectId = 'my-project';
+$secretId = 'my-secret';
+
+// Create the Secret Manager client.
+$client = new SecretManagerServiceClient();
+
+// Build the parent name from the project.
+$parent = $client->projectName($projectId);
+
+// Create the parent secret.
+$secret = $client->createSecret($parent, $secretId,
+    new Secret([
+        'replication' => new Replication([
+            'automatic' => new Automatic(),
+        ]),
+    ])
+);
