@@ -9,17 +9,15 @@ It is also not guanteed by Google in any way.
 
 ## Installation
 
-If you haven't already, install the `php-cs-fixer` package:
 
-```sh
-composer require --dev "friendsofphp/php-cs-fixer:^3.21"
-```
-
-Next, install the fixer:
+Install the fixer:
 
 ```sh
 composer require --dev "bshaffer/google-cloud-new-surface-fixer"
 ```
+
+**NOTE**:This package relies on "friendsofphp/php-cs-fixer" v3 as a dependency,
+but feel free to install your own compatible version as well:
 
 ## Running the fixer
 
