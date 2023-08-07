@@ -72,15 +72,24 @@ class NewSurfaceFixer extends AbstractFixer
         // Get variable names for all clients
         $clientVars = [];
         foreach ($tokens as $index => $token) {
+            // get variables which are set directly
             if ($token->isGivenKind(T_NEW)) {
                 $nextToken = $tokens[$tokens->getNextMeaningfulToken($index)];
                 if (in_array($nextToken->getContent(), $clients)) {
                     if ($prevIndex = $tokens->getPrevMeaningfulToken($index)) {
                         if ($tokens[$prevIndex]->getContent() === '=') {
                             if ($prevIndex = $tokens->getPrevMeaningfulToken($prevIndex)) {
-                                if ($tokens[$prevIndex]->isGivenKind(T_VARIABLE)) {
+                                if (
+                                    $tokens[$prevIndex]->isGivenKind(T_VARIABLE)
+                                    || (
+                                        $tokens[$prevIndex]->isGivenKind(T_STRING)
+                                        && $tokens[$prevIndex-1]->isGivenKind(T_OBJECT_OPERATOR)
+                                    )
+                                 ) {
+                                    // Handle clients set to $var
                                     $clientFullName = array_search($nextToken->getContent(), $clients);
-                                    $clientVars[$clientFullName] = $tokens[$prevIndex]->getContent();
+                                    $varName = $tokens[$prevIndex]->getContent();
+                                    $clientVars[$varName] = new ClientVar($varName, $clientFullName);
                                 }
                             }
                         }
@@ -96,8 +105,11 @@ class NewSurfaceFixer extends AbstractFixer
         $lastInsertEnd = null; // only used when inserting $request vars after use statements (for inline HTML)
         for ($index = 0; $index < count($tokens); $index++) {
             $token = $tokens[$index];
-            if ($token->isGivenKind(T_VARIABLE)) {
-                if (in_array($token->getContent(), $clientVars)) {
+            if (isset($clientVars[$token->getContent()])) {
+                if ($token->isGivenKind(T_VARIABLE)
+                    || ($token->isGivenKind(T_STRING) && $tokens[$index-1]->isGivenKind(T_OBJECT_OPERATOR))
+                ) {
+                    $clientVar = $clientVars[$token->getContent()];
                     $clientStartIndex = $index;
                     $nextIndex = $tokens->getNextMeaningfulToken($index);
                     $nextToken = $tokens[$nextIndex];
@@ -105,11 +117,10 @@ class NewSurfaceFixer extends AbstractFixer
                         // Get the method being called by the client variable
                         $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
                         $nextToken = $tokens[$nextIndex];
-                        $clientFullName = array_search($token->getContent(), $clientVars);
                         $rpcName = $nextToken->getContent();
 
                         // Get the Request class name
-                        $newClientClass = $this->getNewClientClass($clientFullName);
+                        $newClientClass = $this->getNewClientClass($clientVar->clientClass);
                         if (!method_exists($newClientClass, $rpcName)) {
                             // If the method doesn't exist, there's nothing we can do
                             continue;
@@ -196,7 +207,7 @@ class NewSurfaceFixer extends AbstractFixer
                         $argIndex = 0;
 
                         foreach ($arguments as $startIndex => $argument) {
-                            foreach ($this->getSettersFromToken($tokens, $clientFullName, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
+                            foreach ($this->getSettersFromToken($tokens, $clientVar->clientClass, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
                                 list($method, $varTokens) = $setter;
                                 // whitespace (assume 4 spaces)
                                 $buildRequestTokens[] = new Token([T_WHITESPACE, PHP_EOL . $indent . '    ']);
