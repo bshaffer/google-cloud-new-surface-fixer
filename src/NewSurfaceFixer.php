@@ -172,12 +172,6 @@ class NewSurfaceFixer extends AbstractFixer
                             }
                         }
 
-                        // Tokens for the "$request" variable
-                        $buildRequestTokens = [];
-                        if ($newlineIsStartTag && $rpcCallCount == 1) {
-                            // add a newline when adding just after use statements
-                            $buildRequestTokens[] = new Token([T_WHITESPACE, PHP_EOL]);
-                        }
                         if (!isset($rpcCallCounts[$requestShortName])) {
                             $rpcCallCounts[$requestShortName] = 0;
                         }
@@ -189,36 +183,39 @@ class NewSurfaceFixer extends AbstractFixer
                         );
                         $rpcCallCounts[$requestShortName]++;
 
-                        // Add the code for creating the $request variable and setting its properties
-                        $buildRequestTokens[] = new Token([T_WHITESPACE,  PHP_EOL . $indent]);
-                        $buildRequestTokens[] = new Token([T_VARIABLE, $requestVarName]);
-                        $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
-                        $buildRequestTokens[] = new Token('=');
-                        $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
-                        $buildRequestTokens[] = new Token('(');
-                        $buildRequestTokens[] = new Token([T_NEW, 'new']);
-                        $buildRequestTokens[] = new Token([T_WHITESPACE, ' ']);
-                        $buildRequestTokens[] = new Token([T_STRING, $requestShortName]);
-                        $buildRequestTokens[] = new Token('(');
-                        $buildRequestTokens[] = new Token(')');
-                        $buildRequestTokens[] = new Token(')');
                         $argIndex = 0;
-
+                        $numSetterCalls = 0;
+                        $requestSetterTokens = [];
                         foreach ($arguments as $startIndex => $argument) {
                             foreach ($this->getSettersFromToken($tokens, $clientVar->clientClass, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
+                                $numSetterCalls++;
                                 list($method, $varTokens) = $setter;
                                 // whitespace (assume 4 spaces)
-                                $buildRequestTokens[] = new Token([T_WHITESPACE, PHP_EOL . $indent . '    ']);
+                                $requestSetterTokens[] = new Token([T_WHITESPACE, PHP_EOL . $indent . '    ']);
                                 // setter method
-                                $buildRequestTokens[] = new Token([T_OBJECT_OPERATOR, '->' . $method]);
+                                $requestSetterTokens[] = new Token([T_OBJECT_OPERATOR, '->' . $method]);
                                 // setter value
-                                $buildRequestTokens[] = new Token('(');
-                                $buildRequestTokens = array_merge($buildRequestTokens, $varTokens);
-                                $buildRequestTokens[] = new Token(')');
+                                $requestSetterTokens[] = new Token('(');
+                                $requestSetterTokens = array_merge($requestSetterTokens, $varTokens);
+                                $requestSetterTokens[] = new Token(')');
                             }
                             $argIndex++;
                         }
-                        $buildRequestTokens[] = new Token(';');
+                        $requestSetterTokens[] = new Token(';');
+
+                        // Tokens for the "$request" variable
+                        $initRequestVarTokens = $this->getBuildRequestTokens(
+                            $indent,
+                            $requestVarName,
+                            $requestShortName,
+                            $numSetterCalls > 0
+                        );
+                        if ($newlineIsStartTag && $rpcCallCount == 1) {
+                            // add a newline before $request variable when adding just after use statements
+                            // NOTE: This is done for inline HTML
+                            array_unshift($initRequestVarTokens, new Token([T_WHITESPACE, PHP_EOL]));
+                        }
+                        $buildRequestTokens = array_merge($initRequestVarTokens, $requestSetterTokens);
 
                         $tokens->insertAt($lineStart, $buildRequestTokens);
                         if ($newlineIsStartTag) {
@@ -254,6 +251,29 @@ class NewSurfaceFixer extends AbstractFixer
             $orderFixer = new OrderedImportsFixer();
             $orderFixer->fix($file, $tokens);
         }
+    }
+
+    private function getBuildRequestTokens(
+        string $indent,
+        string $requestVarName,
+        string $requestClassShortName,
+        bool $parenthesis
+    ) {
+        // Add the code for creating the $request variable
+        return array_filter([
+            new Token([T_WHITESPACE,  PHP_EOL . $indent]),
+            new Token([T_VARIABLE, $requestVarName]),
+            new Token([T_WHITESPACE, ' ']),
+            new Token('='),
+            new Token([T_WHITESPACE, ' ']),
+            $parenthesis ? new Token('(') : null,
+            new Token([T_NEW, 'new']),
+            new Token([T_WHITESPACE, ' ']),
+            new Token([T_STRING, $requestClassShortName]),
+            new Token('('),
+            new Token(')'),
+            $parenthesis ? new Token(')') : null,
+        ]);
     }
 
     private function getNewClientClass(string $legacyClientClass)

@@ -9,5 +9,5 @@ use Google\Cloud\Dlp\V2\ListInfoTypesRequest;
 $dlp = new DlpServiceClient();
 
 // no args
-$listInfoTypesRequest = (new ListInfoTypesRequest());
+$listInfoTypesRequest = new ListInfoTypesRequest();
 $infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);

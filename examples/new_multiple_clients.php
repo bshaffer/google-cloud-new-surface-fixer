@@ -22,7 +22,7 @@ $secretmanager = new SecretManagerServiceClient();
 $storage = new StorageClient();
 
 // these should update
-$listInfoTypesRequest = (new ListInfoTypesRequest());
+$listInfoTypesRequest = new ListInfoTypesRequest();
 $infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
 $listSecretsRequest = (new ListSecretsRequest())
     ->setParent('this/is/a/parent');

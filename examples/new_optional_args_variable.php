@@ -14,7 +14,7 @@ use Google\Cloud\Dlp\V2\StorageConfig;
 $dlp = new DlpServiceClient();
 
 // optional args array (variable)
-$listInfoTypesRequest = (new ListInfoTypesRequest());
+$listInfoTypesRequest = new ListInfoTypesRequest();
 $infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
 
 // optional args array (inline array)

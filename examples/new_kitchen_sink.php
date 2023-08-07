@@ -21,11 +21,11 @@ use Google\Cloud\Unordered\Namespace;
 $dlp = new DlpServiceClient();
 
 // no args
-$listInfoTypesRequest = (new ListInfoTypesRequest());
+$listInfoTypesRequest = new ListInfoTypesRequest();
 $infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
 
 // optional args array (variable form)
-$listInfoTypesRequest1 = (new ListInfoTypesRequest());
+$listInfoTypesRequest1 = new ListInfoTypesRequest();
 $dlp->listInfoTypes($listInfoTypesRequest1);
 
 // required args variable
