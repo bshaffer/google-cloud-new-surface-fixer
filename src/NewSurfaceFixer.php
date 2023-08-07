@@ -106,10 +106,8 @@ class NewSurfaceFixer extends AbstractFixer
         for ($index = 0; $index < count($tokens); $index++) {
             $token = $tokens[$index];
             if (isset($clientVars[$token->getContent()])) {
-                if ($token->isGivenKind(T_VARIABLE)
-                    || ($token->isGivenKind(T_STRING) && $tokens[$index-1]->isGivenKind(T_OBJECT_OPERATOR))
-                ) {
-                    $clientVar = $clientVars[$token->getContent()];
+                $clientVar = $clientVars[$token->getContent()];
+                if ($clientVar->isDeclaredAt($tokens, $index)) {
                     $clientStartIndex = $index;
                     $nextIndex = $tokens->getNextMeaningfulToken($index);
                     $nextToken = $tokens[$nextIndex];

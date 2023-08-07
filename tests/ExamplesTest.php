@@ -21,18 +21,21 @@ class ExamplesTest extends TestCase
      */
     public function testLegacySamples($filename)
     {
-        $filepath = __DIR__ . '/../examples/' . $filename;
-        $tokens = Tokens::fromCode(file_get_contents($filepath));
-        $fileInfo = new SplFileInfo($filepath);
+        $legacyFilepath = __DIR__ . '/../examples/' . $filename;
+        $newFilepath = str_replace('legacy_', 'new_', $legacyFilepath);
+        $tokens = Tokens::fromCode(file_get_contents($legacyFilepath));
+        $fileInfo = new SplFileInfo($legacyFilepath);
         $this->fixer->fix($fileInfo, $tokens);
         $code = $tokens->generateCode();
-        if (file_get_contents(str_replace('legacy_', 'new_', $filepath)) !== $code) {
+        if (!file_exists($newFilepath)
+            || file_get_contents($newFilepath) !== $code) {
             if (getenv('UPDATE_FIXTURES=1')) {
-                file_put_contents(str_replace('legacy_', 'new_', $filepath), $code);
+                file_put_contents($newFilepath, $code);
                 $this->markTestIncomplete('Updated fixtures');
             }
+            $this->fail('File does not exist');
         }
-        $this->assertStringEqualsFile(str_replace('legacy_', 'new_', $filepath), $code);
+        $this->assertStringEqualsFile($newFilepath, $code);
     }
 
     public static function provideLegacySamples()

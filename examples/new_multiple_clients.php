@@ -31,28 +31,3 @@ $secrets = $secretmanager->listSecrets($listSecretsRequest);
 // these shouldn't update
 $operations = $longrunning->listOperations();
 $serviceAccount = $storage->getServiceAccount();
-
-class VariablesInsideClass extends TestCase
-{
-    private $dlp;
-    private $secretmanager;
-
-    public function __comnstruct()
-    {
-        $this->dlp = new DlpServiceClient();
-        $this->secretmanager = new SecretManagerServiceClient();
-    }
-
-    public function callDlp()
-    {
-        $listInfoTypesRequest1 = (new ListInfoTypesRequest());
-        $infoTypes = $this->dlp->listInfoTypes($listInfoTypesRequest1);
-    }
-
-    public function callSecretManager()
-    {
-        $listSecretsRequest1 = (new ListSecretsRequest())
-            ->setParent('this/is/a/parent');
-        $secrets = $this->secretmanager->listSecrets($listSecretsRequest1);
-    }
-}
