@@ -64,99 +64,107 @@ class NewSurfaceFixer extends AbstractFixer
         $insertStart = null;
         for ($index = 0; $index < count($tokens); $index++) {
             $clientVar = $clientVars[$tokens[$index]->getContent()] ?? null;
-            if ($clientVar && $clientVar->isDeclaredAt($tokens, $index)) {
-                $operatorIndex = $tokens->getNextMeaningfulToken($index);
-                if ($tokens[$operatorIndex]->isGivenKind(T_OBJECT_OPERATOR)) {
-                    // Get the method being called by the client variable
-                    $methodIndex = $tokens->getNextMeaningfulToken($operatorIndex);
-                    if (!$rpcMethod = $clientVar->getRpcMethod($tokens[$methodIndex]->getContent())) {
-                        // The method doesn't exist, or is not an RPC call
-                        continue;
-                    }
-
-                    // Get the arguments being passed to the RPC method
-                    [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $methodIndex);
-
-                    // determine where to insert the new tokens
-                    $lineStart = $clientVar->getLineStart($tokens);
-
-                    // Handle differently when we are dealing with inline PHP
-                    $isInlinePhpCall = $tokens[$lineStart]->getId() === T_OPEN_TAG;
-
-                    $indent = '';
-                    if (!$isInlinePhpCall) {
-                        $indent = str_replace("\n", '', $tokens[$lineStart]->getContent());
-                    }
-
-                    $requestClass = $rpcMethod->getRequestClass();
-                    $requestVarName = $counter->getNextVariableName($requestClass->getShortName());
-
-                    // Tokens for the setters called on the new request object
-                    $requestSetterTokens = $this->getRequestSetterTokens($tokens, $rpcMethod, $arguments, $indent);
-
-                    // Tokens for initializing the new request variable
-                    $newRequestTokens = $this->getInitNewRequestTokens(
-                        $requestVarName,
-                        $requestClass->getShortName(),
-                        count($requestSetterTokens) > 0
-                    );
-
-                    // Add them together
-                    $newRequestTokens = array_merge(
-                        [new Token([T_WHITESPACE,  PHP_EOL . $indent])],
-                        $newRequestTokens,
-                        $requestSetterTokens,
-                        [new Token(';')]
-                    );
-
-                    // When inserting for inline PHP, add a newline before the first request variable
-                    if ($isInlinePhpCall && $counter->isFirstVar()) {
-                        array_unshift($newRequestTokens, new Token([T_WHITESPACE, PHP_EOL]));
-                    }
-
-                    // Determine where the request variable tokens should be inserted
-                    if ($isInlinePhpCall) {
-                        // If we are inline, insert right before the first closing PHP tag
-                        if (is_null($insertStart)) {
-                            $insertStart = $tokens->getNextTokenOfKind($importStart, ['?>', [T_CLOSE_TAG]]) - 1;
-                        }
-                    } else {
-                        // else, insert at beginning of the line of the original RPC call
-                        $insertStart = $lineStart;
-                    }
-
-                    // insert the request variable tokens
-                    $tokens->insertAt($insertStart, $newRequestTokens);
-
-                    // Replace the original RPC call arguments with the new request variable
-                    $tokens->overrideRange(
-                        $firstIndex + 1 + count($newRequestTokens),
-                        $lastIndex - 1 + count($newRequestTokens),
-                        [new Token([T_VARIABLE, $requestVarName])]
-                    );
-
-                    // Increment the current $index and $insertStart
-                    $index = $firstIndex + 1 + count($newRequestTokens);
-                    if ($isInlinePhpCall) {
-                        $insertStart = $insertStart + count($newRequestTokens);
-                    }
-
-                    // Add the request class to be imported later
-                    $classesToImport[$requestClass->getName()] = $requestClass;
-                }
+            if (is_null($clientVar)) {
+                // The token does not contain a client var
+                continue;
             }
+
+            if (!$clientVar->isDeclaredAt($tokens, $index)) {
+                // The token looks like our client var but isn't
+                continue;
+            }
+
+            $operatorIndex = $tokens->getNextMeaningfulToken($index);
+            if (!$tokens[$operatorIndex]->isGivenKind(T_OBJECT_OPERATOR)) {
+                // The client var is not calling a method
+                continue;
+            }
+
+            // The method being called by the client variable
+            $methodIndex = $tokens->getNextMeaningfulToken($operatorIndex);
+            if (!$rpcMethod = $clientVar->getRpcMethod($tokens[$methodIndex]->getContent())) {
+                // The method doesn't exist, or is not an RPC call
+                continue;
+            }
+
+            // Get the arguments being passed to the RPC method
+            [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $methodIndex);
+
+            // determine where to insert the new tokens
+            $lineStart = $clientVar->getLineStart($tokens);
+
+            // Handle differently when we are dealing with inline PHP
+            $isInlinePhpCall = $tokens[$lineStart]->getId() === T_OPEN_TAG;
+
+            $indent = '';
+            if (!$isInlinePhpCall) {
+                $indent = str_replace("\n", '', $tokens[$lineStart]->getContent());
+            }
+
+            $requestClass = $rpcMethod->getRequestClass();
+            $requestVarName = $counter->getNextVariableName($requestClass->getShortName());
+
+            // Tokens for the setters called on the new request object
+            $requestSetterTokens = $this->getRequestSetterTokens($tokens, $rpcMethod, $arguments, $indent);
+
+            // Tokens for initializing the new request variable
+            $newRequestTokens = $this->getInitNewRequestTokens(
+                $requestVarName,
+                $requestClass->getShortName(),
+                count($requestSetterTokens) > 0
+            );
+
+            // Add them together
+            $newRequestTokens = array_merge(
+                [new Token([T_WHITESPACE,  PHP_EOL . $indent])],
+                $newRequestTokens,
+                $requestSetterTokens,
+                [new Token(';')]
+            );
+
+            // When inserting for inline PHP, add a newline before the first request variable
+            if ($isInlinePhpCall && $counter->isFirstVar()) {
+                array_unshift($newRequestTokens, new Token([T_WHITESPACE, PHP_EOL]));
+            }
+
+            // Determine where the request variable tokens should be inserted
+            if ($isInlinePhpCall) {
+                // If we are inline, insert right before the first closing PHP tag
+                if (is_null($insertStart)) {
+                    $insertStart = $tokens->getNextTokenOfKind($importStart, ['?>', [T_CLOSE_TAG]]) - 1;
+                }
+            } else {
+                // else, insert at beginning of the line of the original RPC call
+                $insertStart = $lineStart;
+            }
+
+            // insert the request variable tokens
+            $tokens->insertAt($insertStart, $newRequestTokens);
+
+            // Replace the original RPC call arguments with the new request variable
+            $tokens->overrideRange(
+                $firstIndex + 1 + count($newRequestTokens),
+                $lastIndex - 1 + count($newRequestTokens),
+                [new Token([T_VARIABLE, $requestVarName])]
+            );
+
+            // Increment the current $index and $insertStart
+            $index = $firstIndex + 1 + count($newRequestTokens);
+            if ($isInlinePhpCall) {
+                $insertStart = $insertStart + count($newRequestTokens);
+            }
+
+            // Add the request class to be imported later
+            $classesToImport[$requestClass->getName()] = $requestClass;
         }
 
         // Import the new request classes
         if ($classesToImport) {
-            $requestClassImportTokens = [];
-            foreach ($classesToImport as $requestClass) {
-                $requestClassImportTokens = array_merge(
-                    $requestClassImportTokens,
-                    $requestClass->getImportTokens()
-                );
-            }
-            $tokens->insertAt($importStart, $requestClassImportTokens);
+            $requestClassImportTokens = array_map(
+                fn($requestClass) => $requestClass->getImportTokens(),
+                array_values($classesToImport)
+            );
+            $tokens->insertAt($importStart, array_merge(...$requestClassImportTokens));
             // Ensure new imports are in the correct order
             $orderFixer = new OrderedImportsFixer();
             $orderFixer->fix($file, $tokens);
