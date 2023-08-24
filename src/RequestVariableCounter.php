@@ -8,6 +8,12 @@ class RequestVariableCounter
 {
     private array $varCounts = [];
 
+    public function isFirstVar()
+    {
+        return count($this->varCounts) == 1
+            && array_values($this->varCounts)[0] == 1;
+    }
+
     public function getNextVariableName(string $shortName): string
     {
         if (!isset($this->varCounts[$shortName])) {

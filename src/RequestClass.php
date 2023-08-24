@@ -2,6 +2,7 @@
 
 namespace Google\Cloud\Tools;
 
+use PhpCsFixer\Tokenizer\Token;
 use PhpCsFixer\Tokenizer\Tokens;
 use ReflectionClass;
 
@@ -24,8 +25,11 @@ class RequestClass
         return $this->reflection->getName();
     }
 
-    public function __toString(): string
+    public function getImportTokens(): array
     {
-        return $this->getName();
+        return array_merge(
+            [new Token([T_WHITESPACE, PHP_EOL])],
+            UseStatement::getTokensFromClassName($this->getName())
+        );
     }
 }

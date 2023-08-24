@@ -8,16 +8,18 @@ use ReflectionParameter;
 
 class RpcMethod
 {
-    private ReflectionMethod $reflection;
+    private ReflectionMethod $legacyReflection;
+    private ReflectionMethod $newReflection;
 
-    public function __construct(string $className, string $methodName)
+    public function __construct(ClientVar $clientVar, string $methodName)
     {
-        $this->reflection = new ReflectionMethod($className, $methodName);
+        $this->legacyReflection = new ReflectionMethod($clientVar->getClassName(), $methodName);
+        $this->newReflection = new ReflectionMethod($clientVar->getNewClassName(), $methodName);
     }
 
     public function getParameterAtIndex(int $index): ?RpcParameter
     {
-        $params = $this->reflection->getParameters();
+        $params = $this->legacyReflection->getParameters();
         if (isset($params[$index])) {
             return new RpcParameter($params[$index]);
         }
@@ -27,7 +29,7 @@ class RpcMethod
 
     public function getRequestClass(): RequestClass
     {
-        $firstParameter = $this->reflection->getParameters()[0];
+        $firstParameter = $this->newReflection->getParameters()[0];
         return new RequestClass($firstParameter->getType()->getName());
     }
 }

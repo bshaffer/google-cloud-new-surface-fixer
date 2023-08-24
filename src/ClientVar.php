@@ -9,6 +9,7 @@ class ClientVar
 {
     public $varName;
     public $className;
+    private $startIndex;
 
     public function __construct(
         $varName,
@@ -16,6 +17,11 @@ class ClientVar
     ) {
         $this->varName = $varName;
         $this->className = $className;
+    }
+
+    public function getClassName(): string
+    {
+        return $this->className;
     }
 
     /**
@@ -26,8 +32,13 @@ class ClientVar
     public function isDeclaredAt(Tokens $tokens, int $index): bool
     {
         $token = $tokens[$index];
-        return $token->isGivenKind(T_VARIABLE)
-            || ($token->isGivenKind(T_STRING) && $tokens[$index-1]->isGivenKind(T_OBJECT_OPERATOR));
+        if ($token->isGivenKind(T_VARIABLE)
+            || ($token->isGivenKind(T_STRING) && $tokens[$index-1]->isGivenKind(T_OBJECT_OPERATOR))
+        ) {
+            $this->startIndex = $index;
+            return true;
+        }
+        return false;
     }
 
     public function getNewClassName(): string
@@ -47,7 +58,7 @@ class ClientVar
         // Get the Request class name
         $newClientClass = $this->getNewClassname();
         if (!method_exists($newClientClass, $rpcName)) {
-            // If the method doesn't exist, there's nothing we can do
+            // If the new method doesn't exist, there's nothing we can do
             return null;
         }
         $method = new ReflectionMethod($newClientClass, $rpcName);
@@ -60,17 +71,42 @@ class ClientVar
             return null;
         }
 
-        return new RpcMethod($newClientClass, $rpcName);
+        return new RpcMethod($this, $rpcName);
+    }
+
+    public function getLineStart(Tokens $tokens): int
+    {
+        // determine the indent
+        $indent = '';
+        $lineStart = $this->startIndex;
+        $i = 1;
+        while (
+            $this->startIndex - $i >= 0
+            && false === strpos($tokens[$this->startIndex - $i]->getContent(), "\n")
+            && $tokens[$this->startIndex - $i]->getId() !== T_OPEN_TAG
+        ) {
+            $i++;
+        }
+
+        return $this->startIndex - $i;
     }
 
     public static function getClientVarsFromTokens(Tokens $tokens, array $clients): array
     {
+        $clientShortNames = [];
+        foreach ($clients as $clientClass) {
+            // Save the client names so we know what we changed
+            $parts = explode('\\', $clientClass);
+            $shortName = array_pop($parts);
+            $clientShortNames[$clientClass] = $shortName;
+        }
         $clientVars = [];
         foreach ($tokens as $index => $token) {
             // get variables which are set directly
             if ($token->isGivenKind(T_NEW)) {
                 $nextToken = $tokens[$tokens->getNextMeaningfulToken($index)];
-                if (in_array($nextToken->getContent(), $clients)) {
+                $shortName = $nextToken->getContent();
+                if (in_array($shortName, $clientShortNames)) {
                     if ($prevIndex = $tokens->getPrevMeaningfulToken($index)) {
                         if ($tokens[$prevIndex]->getContent() === '=') {
                             if ($prevIndex = $tokens->getPrevMeaningfulToken($prevIndex)) {
@@ -82,9 +118,9 @@ class ClientVar
                                     )
                                  ) {
                                     // Handle clients set to $var
-                                    $clientFullName = array_search($nextToken->getContent(), $clients);
+                                    $clientClass = array_search($shortName, $clientShortNames);
                                     $varName = $tokens[$prevIndex]->getContent();
-                                    $clientVars[$varName] = new ClientVar($varName, $clientFullName);
+                                    $clientVars[$varName] = new ClientVar($varName, $clientClass);
                                 }
                             }
                         }
