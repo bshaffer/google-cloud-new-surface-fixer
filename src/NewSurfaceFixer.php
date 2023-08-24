@@ -38,211 +38,170 @@ class NewSurfaceFixer extends AbstractFixer
                 . 'cloud client library and include its autoloader in .php-cs-fixer.dist.php'
             );
         }
-        $useDeclarations = (new NamespaceUsesAnalyzer())->getDeclarationsFromTokens($tokens);
-
+        $useDeclarations = UseStatement::getUseDeclarations($tokens);
         $clients = [];
-        // Change to new namespace
-        foreach ($tokens->getNamespaceDeclarations() as $namespace) {
-            foreach ($useDeclarations as $useDeclaration) {
-                $clientClass = $useDeclaration->getFullName();
-                $clientShortName = $useDeclaration->getShortName();
-                if (
-                    0 === strpos($clientClass, 'Google\\')
-                    && 'Client' === substr($clientShortName, -6)
-                    && false === strpos($clientClass, '\\Client\\')
-                    && class_exists($clientClass)
-                ) {
-                    if (false !== strpos(get_parent_class($clientClass), '\Gapic\\')) {
-                        $parts = explode('\\', $clientClass);
-                        $shortName = array_pop($parts);
-                        $newClientName = $this->getNewClientClass($clientClass);
-                        if (class_exists($newClientName)) {
-                            $clients[$clientClass] = $clientShortName;
-                            $tokens->overrideRange(
-                                $useDeclaration->getStartIndex(),
-                                $useDeclaration->getEndIndex(),
-                                $this->getUseStatementTokensFromClassName($newClientName)
-                            );
-                        }
-                    }
-                }
+        foreach (UseStatement::getImportedClients($useDeclarations) as $clientClass => $useDeclaration) {
+            $newClientName = ClientVar::getNewClassFromClassname($clientClass);
+            if (class_exists($newClientName)) {
+                // Rename old clients to new namespaces
+                $tokens->overrideRange(
+                    $useDeclaration->getStartIndex(),
+                    $useDeclaration->getEndIndex(),
+                    UseStatement::getTokensFromClassName($newClientName)
+                );
+                // Save the client names so we know what we changed
+                $parts = explode('\\', $clientClass);
+                $shortName = array_pop($parts);
+                $clients[$clientClass] = $shortName;
             }
         }
 
         // Get variable names for all clients
-        $clientVars = [];
-        foreach ($tokens as $index => $token) {
-            // get variables which are set directly
-            if ($token->isGivenKind(T_NEW)) {
-                $nextToken = $tokens[$tokens->getNextMeaningfulToken($index)];
-                if (in_array($nextToken->getContent(), $clients)) {
-                    if ($prevIndex = $tokens->getPrevMeaningfulToken($index)) {
-                        if ($tokens[$prevIndex]->getContent() === '=') {
-                            if ($prevIndex = $tokens->getPrevMeaningfulToken($prevIndex)) {
-                                if (
-                                    $tokens[$prevIndex]->isGivenKind(T_VARIABLE)
-                                    || (
-                                        $tokens[$prevIndex]->isGivenKind(T_STRING)
-                                        && $tokens[$prevIndex-1]->isGivenKind(T_OBJECT_OPERATOR)
-                                    )
-                                 ) {
-                                    // Handle clients set to $var
-                                    $clientFullName = array_search($nextToken->getContent(), $clients);
-                                    $varName = $tokens[$prevIndex]->getContent();
-                                    $clientVars[$varName] = new ClientVar($varName, $clientFullName);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        $clientVars = ClientVar::getClientVarsFromTokens($tokens, $clients);
 
         // Find the RPC methods being called on the clients
         $requestClasses = [];
-        $rpcCallCount = 0;
         $rpcCallCounts = [];
         $lastInsertEnd = null; // only used when inserting $request vars after use statements (for inline HTML)
         for ($index = 0; $index < count($tokens); $index++) {
-            $token = $tokens[$index];
-            if (isset($clientVars[$token->getContent()])) {
-                $clientVar = $clientVars[$token->getContent()];
-                if ($clientVar->isDeclaredAt($tokens, $index)) {
-                    $clientStartIndex = $index;
-                    $nextIndex = $tokens->getNextMeaningfulToken($index);
+            $clientVar = $clientVars[$tokens[$index]->getContent()] ?? null;
+            if ($clientVar && $clientVar->isDeclaredAt($tokens, $index)) {
+                $clientStartIndex = $index;
+                $nextIndex = $tokens->getNextMeaningfulToken($index);
+                $nextToken = $tokens[$nextIndex];
+                if ($nextToken->isGivenKind(T_OBJECT_OPERATOR)) {
+                    // Get the method being called by the client variable
+                    $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
                     $nextToken = $tokens[$nextIndex];
-                    if ($nextToken->isGivenKind(T_OBJECT_OPERATOR)) {
-                        // Get the method being called by the client variable
-                        $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
-                        $nextToken = $tokens[$nextIndex];
-                        $rpcName = $nextToken->getContent();
+                    $rpcName = $nextToken->getContent();
 
-                        // Get the Request class name
-                        $newClientClass = $this->getNewClientClass($clientVar->clientClass);
-                        if (!method_exists($newClientClass, $rpcName)) {
-                            // If the method doesn't exist, there's nothing we can do
-                            continue;
-                        }
-                        $method = new ReflectionMethod($newClientClass, $rpcName);
-                        $parameters = $method->getParameters();
-                        if (!isset($parameters[0]) || !$type = $parameters[0]->getType()) {
-                            continue;
-                        }
-                        if ($type->isBuiltin()) {
-                            // If the first parameter is a primitive type, assume this is a helper method
-                            continue;
-                        }
-                        $rpcCallCount++;
-                        $requestClass = $type->getName();
-                        $requestShortName = (new ReflectionClass($requestClass))->getShortName();
-                        $requestClasses[] = $requestClass;
-
-                        // Get the arguments being passed to the RPC method
-                        [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
-
-                        // determine the indent
-                        $indent = '';
-                        $lineStart = $clientStartIndex;
-                        $i = 1;
-                        while (
-                            $clientStartIndex - $i >= 0
-                            && false === strpos($tokens[$clientStartIndex - $i]->getContent(), "\n")
-                            && $tokens[$clientStartIndex - $i]->getId() !== T_OPEN_TAG
-                        ) {
-                            $i++;
-                        }
-                        // Handle differently when we are dealing with inline PHP
-                        $newlineIsStartTag = $tokens[$clientStartIndex - $i]->getId() === T_OPEN_TAG;
-
-                        if ($clientStartIndex - $i >= 0) {
-                            if ($newlineIsStartTag) {
-                                if (is_null($lastInsertEnd)) {
-                                    $useDeclarationEnd = $useDeclarations[count($useDeclarations) - 1]->getEndIndex() + 1;
-                                    if ($lastInsertEnd = $tokens->getNextTokenOfKind($useDeclarationEnd, ['?>', [T_CLOSE_TAG]])) {
-                                        $lastInsertEnd--;
-                                    } else {
-                                        // Fallback to after use statements (shouldn't ever happen)
-                                        $lastInsertEnd = $useDeclarationEnd;
-                                    }
-                                }
-                                $lineStart = $lastInsertEnd;
-                            } else {
-                                $lineStart = $clientStartIndex - $i;
-                                $indent = str_replace("\n", '', $tokens[$clientStartIndex - $i]->getContent());
-                            }
-                        }
-
-                        if (!isset($rpcCallCounts[$requestShortName])) {
-                            $rpcCallCounts[$requestShortName] = 0;
-                        }
-                        // determine $request variable name depending on call count
-                        $requestVarName = sprintf(
-                            '$%s%s',
-                            lcfirst($requestShortName),
-                            $rpcCallCounts[$requestShortName] ? $rpcCallCounts[$requestShortName] : ''
-                        );
-                        $rpcCallCounts[$requestShortName]++;
-
-                        $argIndex = 0;
-                        $numSetterCalls = 0;
-                        $requestSetterTokens = [];
-                        foreach ($arguments as $startIndex => $argument) {
-                            foreach ($this->getSettersFromToken($tokens, $clientVar->clientClass, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
-                                $numSetterCalls++;
-                                list($method, $varTokens) = $setter;
-                                // whitespace (assume 4 spaces)
-                                $requestSetterTokens[] = new Token([T_WHITESPACE, PHP_EOL . $indent . '    ']);
-                                // setter method
-                                $requestSetterTokens[] = new Token([T_OBJECT_OPERATOR, '->' . $method]);
-                                // setter value
-                                $requestSetterTokens[] = new Token('(');
-                                $requestSetterTokens = array_merge($requestSetterTokens, $varTokens);
-                                $requestSetterTokens[] = new Token(')');
-                            }
-                            $argIndex++;
-                        }
-                        $requestSetterTokens[] = new Token(';');
-
-                        // Tokens for the "$request" variable
-                        $initRequestVarTokens = $this->getBuildRequestTokens(
-                            $indent,
-                            $requestVarName,
-                            $requestShortName,
-                            $numSetterCalls > 0
-                        );
-                        if ($newlineIsStartTag && $rpcCallCount == 1) {
-                            // add a newline before $request variable when adding just after use statements
-                            // NOTE: This is done for inline HTML
-                            array_unshift($initRequestVarTokens, new Token([T_WHITESPACE, PHP_EOL]));
-                        }
-                        $buildRequestTokens = array_merge($initRequestVarTokens, $requestSetterTokens);
-
-                        $tokens->insertAt($lineStart, $buildRequestTokens);
-                        if ($newlineIsStartTag) {
-                            $lastInsertEnd = $lineStart + count($buildRequestTokens);
-                        }
-
-                        // Replace the arguments with $request
-                        $tokens->overrideRange(
-                            $firstIndex + 1 + count($buildRequestTokens),
-                            $lastIndex - 1 + count($buildRequestTokens),
-                            [
-                                new Token([T_VARIABLE, $requestVarName]),
-                            ]
-                        );
-                        $index = $firstIndex + 1 + count($buildRequestTokens);
+                    // Get the Request class name
+                    $newClientClass = $clientVar->getNewClassname();
+                    if (!method_exists($newClientClass, $rpcName)) {
+                        // If the method doesn't exist, there's nothing we can do
+                        continue;
                     }
+                    $method = new ReflectionMethod($newClientClass, $rpcName);
+                    $parameters = $method->getParameters();
+                    if (!isset($parameters[0]) || !$type = $parameters[0]->getType()) {
+                        continue;
+                    }
+                    if ($type->isBuiltin()) {
+                        // If the first parameter is a primitive type, assume this is a helper method
+                        continue;
+                    }
+                    $requestClasses[] = $requestClass = new RequestClass($type->getName());
+
+                    // Get the arguments being passed to the RPC method
+                    [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
+
+                    // determine the indent
+                    $indent = '';
+                    $lineStart = $clientStartIndex;
+                    $i = 1;
+                    while (
+                        $clientStartIndex - $i >= 0
+                        && false === strpos($tokens[$clientStartIndex - $i]->getContent(), "\n")
+                        && $tokens[$clientStartIndex - $i]->getId() !== T_OPEN_TAG
+                    ) {
+                        $i++;
+                    }
+                    // Handle differently when we are dealing with inline PHP
+                    $newlineIsStartTag = $tokens[$clientStartIndex - $i]->getId() === T_OPEN_TAG;
+
+                    if ($clientStartIndex - $i >= 0) {
+                        if ($newlineIsStartTag) {
+                            if (is_null($lastInsertEnd)) {
+                                $useDeclarationEnd = $useDeclarations[count($useDeclarations) - 1]->getEndIndex() + 1;
+                                if ($lastInsertEnd = $tokens->getNextTokenOfKind($useDeclarationEnd, ['?>', [T_CLOSE_TAG]])) {
+                                    $lastInsertEnd--;
+                                } else {
+                                    // Fallback to after use statements (shouldn't ever happen)
+                                    $lastInsertEnd = $useDeclarationEnd;
+                                }
+                            }
+                            $lineStart = $lastInsertEnd;
+                        } else {
+                            $lineStart = $clientStartIndex - $i;
+                            $indent = str_replace("\n", '', $tokens[$clientStartIndex - $i]->getContent());
+                        }
+                    }
+
+                    $requestShortName = $requestClass->getShortName();
+                    if (!isset($rpcCallCounts[$requestShortName])) {
+                        $rpcCallCounts[$requestShortName] = 0;
+                    }
+                    // determine $request variable name depending on call count
+                    $requestVarName = sprintf(
+                        '$%s%s',
+                        lcfirst($requestShortName),
+                        $rpcCallCounts[$requestShortName] ? $rpcCallCounts[$requestShortName] : ''
+                    );
+                    $rpcCallCounts[$requestShortName]++;
+
+                    $argIndex = 0;
+                    $numSetterCalls = 0;
+                    $requestSetterTokens = [];
+                    foreach ($arguments as $startIndex => $argument) {
+                        foreach ($this->getSettersFromToken($tokens, $clientVar->className, $rpcName, $startIndex, $argIndex, $argument) as $setter) {
+                            $numSetterCalls++;
+                            list($method, $varTokens) = $setter;
+                            // whitespace (assume 4 spaces)
+                            $requestSetterTokens[] = new Token([T_WHITESPACE, PHP_EOL . $indent . '    ']);
+                            // setter method
+                            $requestSetterTokens[] = new Token([T_OBJECT_OPERATOR, '->' . $method]);
+                            // setter value
+                            $requestSetterTokens[] = new Token('(');
+                            $requestSetterTokens = array_merge($requestSetterTokens, $varTokens);
+                            $requestSetterTokens[] = new Token(')');
+                        }
+                        $argIndex++;
+                    }
+                    $requestSetterTokens[] = new Token(';');
+
+                    // Tokens for the "$request" variable
+                    $initRequestVarTokens = $this->getBuildRequestTokens(
+                        $indent,
+                        $requestVarName,
+                        $requestShortName,
+                        $numSetterCalls > 0
+                    );
+                    if ($newlineIsStartTag && count($requestClasses) == 1) {
+                        // add a newline before $request variable when adding just after use statements
+                        // NOTE: This is done for inline HTML
+                        array_unshift($initRequestVarTokens, new Token([T_WHITESPACE, PHP_EOL]));
+                    }
+                    $buildRequestTokens = array_merge($initRequestVarTokens, $requestSetterTokens);
+
+                    $tokens->insertAt($lineStart, $buildRequestTokens);
+                    if ($newlineIsStartTag) {
+                        $lastInsertEnd = $lineStart + count($buildRequestTokens);
+                    }
+
+                    // Replace the arguments with $request
+                    $tokens->overrideRange(
+                        $firstIndex + 1 + count($buildRequestTokens),
+                        $lastIndex - 1 + count($buildRequestTokens),
+                        [
+                            new Token([T_VARIABLE, $requestVarName]),
+                        ]
+                    );
+                    $index = $firstIndex + 1 + count($buildRequestTokens);
                 }
             }
         }
 
         // Add the request namespaces
         $requestClassImports = [];
-        foreach (array_unique($requestClasses) as $requestClass) {
+        $uniqueRequestClasses = [];
+        foreach ($requestClasses as $requestClass) {
+            $uniqueRequestClasses[$requestClass->getName()] = $requestClass;
+        }
+        foreach ($uniqueRequestClasses as $requestClass) {
             $requestClassImports[] = new Token([T_WHITESPACE, PHP_EOL]);
             $requestClassImports = array_merge(
                 $requestClassImports,
-                $this->getUseStatementTokensFromClassName($requestClass)
+                UseStatement::getTokensFromClassName($requestClass->getName())
             );
         }
         if ($requestClassImports && $lastUse = array_pop($useDeclarations)) {
@@ -276,24 +235,15 @@ class NewSurfaceFixer extends AbstractFixer
         ]);
     }
 
-    private function getNewClientClass(string $legacyClientClass)
-    {
-        $parts = explode('\\', $legacyClientClass);
-        $shortName = array_pop($parts);
-        return implode('\\', $parts) . '\\Client\\' . $shortName;
-    }
-
     private function getSettersFromToken($tokens, string $clientFullName, string $rpcName, int $startIndex, int $argIndex, array $argumentTokens): array
     {
         $setters = [];
         $setterName = null;
         if (method_exists($clientFullName, $rpcName)) {
-            $method = new ReflectionMethod($clientFullName, $rpcName);
-            $params = $method->getParameters();
-            $reflectionArg = $params[$argIndex] ?? null;
-            if ($reflectionArg) {
+            $rpcMethod = new RpcMethod($clientFullName, $rpcName);
+            if ($rpcParameter  = $rpcMethod->getParameterAtIndex($argIndex)) {
                 // handle array of optional args!
-                if ($reflectionArg->getName() == 'optionalArgs') {
+                if ($rpcParameter->isOptionalArgs()) {
                     $argumentStart = $tokens->getNextMeaningfulToken($startIndex);
                     if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
                         // If it's an inline array, use the keys to determine the setters
@@ -328,8 +278,7 @@ class NewSurfaceFixer extends AbstractFixer
                                 $prevStart = $valueEnd;
                             }
                         }
-                    }
-                    elseif ($tokens[$argumentStart]->isGivenKind(T_VARIABLE)) {
+                    } elseif ($tokens[$argumentStart]->isGivenKind(T_VARIABLE)) {
                         // if an array is being passed in, find where the array is defined and then do the same
                         $optionalArgsVar = $tokens[$argumentStart]->getContent();
                         for ($index = $argumentStart - 1; $index > 0; $index--) {
@@ -369,7 +318,7 @@ class NewSurfaceFixer extends AbstractFixer
                     }
                 } else {
                     // Just place the argument tokens in a setter
-                    $setterName = 'set' . ucfirst($reflectionArg->getName());
+                    $setterName = $rpcParameter->getSetter();
                     // Remove leading whitespace
                     for ($i = 0; $argumentTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
                         unset($argumentTokens[$i]);
@@ -475,21 +424,6 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         return $index;
-    }
-
-    private function getUseStatementTokensFromClassName(string $className): array
-    {
-        $tokens = [
-            new Token([T_USE, 'use']),
-            new Token([T_WHITESPACE, ' ']),
-        ];
-        foreach (explode('\'', $className) as $part) {
-            $tokens[] = new Token([T_STRING, $part]);
-            $tokens[] = new Token([T_NS_SEPARATOR, '\\']);
-        }
-        array_pop($tokens); // remove last namespace separator
-        $tokens[] = new Token(';');
-        return $tokens;
     }
 
     /**
