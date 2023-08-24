@@ -61,7 +61,7 @@ class NewSurfaceFixer extends AbstractFixer
 
         // Find the RPC methods being called on the clients
         $requestClasses = [];
-        $rpcCallCounts = [];
+        $counter = new RequestVariableCounter();
         $lastInsertEnd = null; // only used when inserting $request vars after use statements (for inline HTML)
         for ($index = 0; $index < count($tokens); $index++) {
             $clientVar = $clientVars[$tokens[$index]->getContent()] ?? null;
@@ -76,21 +76,11 @@ class NewSurfaceFixer extends AbstractFixer
                     $rpcName = $nextToken->getContent();
 
                     // Get the Request class name
-                    $newClientClass = $clientVar->getNewClassname();
-                    if (!method_exists($newClientClass, $rpcName)) {
-                        // If the method doesn't exist, there's nothing we can do
+                    if (!$rpcMethod = $clientVar->getRpcMethod($rpcName)) {
+                        // The method doesn't exist, or is not an RPC call
                         continue;
                     }
-                    $method = new ReflectionMethod($newClientClass, $rpcName);
-                    $parameters = $method->getParameters();
-                    if (!isset($parameters[0]) || !$type = $parameters[0]->getType()) {
-                        continue;
-                    }
-                    if ($type->isBuiltin()) {
-                        // If the first parameter is a primitive type, assume this is a helper method
-                        continue;
-                    }
-                    $requestClasses[] = $requestClass = new RequestClass($type->getName());
+                    $requestClasses[] = $requestClass = $rpcMethod->getRequestClass();
 
                     // Get the arguments being passed to the RPC method
                     [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $nextIndex);
@@ -127,18 +117,6 @@ class NewSurfaceFixer extends AbstractFixer
                         }
                     }
 
-                    $requestShortName = $requestClass->getShortName();
-                    if (!isset($rpcCallCounts[$requestShortName])) {
-                        $rpcCallCounts[$requestShortName] = 0;
-                    }
-                    // determine $request variable name depending on call count
-                    $requestVarName = sprintf(
-                        '$%s%s',
-                        lcfirst($requestShortName),
-                        $rpcCallCounts[$requestShortName] ? $rpcCallCounts[$requestShortName] : ''
-                    );
-                    $rpcCallCounts[$requestShortName]++;
-
                     $argIndex = 0;
                     $numSetterCalls = 0;
                     $requestSetterTokens = [];
@@ -158,12 +136,12 @@ class NewSurfaceFixer extends AbstractFixer
                         $argIndex++;
                     }
                     $requestSetterTokens[] = new Token(';');
-
+                    $requestVarName = $counter->getNextVariableName($requestClass->getShortName());
                     // Tokens for the "$request" variable
                     $initRequestVarTokens = $this->getBuildRequestTokens(
                         $indent,
                         $requestVarName,
-                        $requestShortName,
+                        $requestClass->getShortName(),
                         $numSetterCalls > 0
                     );
                     if ($newlineIsStartTag && count($requestClasses) == 1) {
@@ -182,9 +160,7 @@ class NewSurfaceFixer extends AbstractFixer
                     $tokens->overrideRange(
                         $firstIndex + 1 + count($buildRequestTokens),
                         $lastIndex - 1 + count($buildRequestTokens),
-                        [
-                            new Token([T_VARIABLE, $requestVarName]),
-                        ]
+                        [new Token([T_VARIABLE, $requestVarName])]
                     );
                     $index = $firstIndex + 1 + count($buildRequestTokens);
                 }
@@ -192,20 +168,22 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         // Add the request namespaces
-        $requestClassImports = [];
-        $uniqueRequestClasses = [];
-        foreach ($requestClasses as $requestClass) {
-            $uniqueRequestClasses[$requestClass->getName()] = $requestClass;
-        }
-        foreach ($uniqueRequestClasses as $requestClass) {
-            $requestClassImports[] = new Token([T_WHITESPACE, PHP_EOL]);
-            $requestClassImports = array_merge(
-                $requestClassImports,
+        $requestClassImportTokens = [];
+        foreach (array_unique($requestClasses) as $requestClass) {
+            $requestClassImportTokens[] = new Token([T_WHITESPACE, PHP_EOL]);
+            $requestClassImportTokens = array_merge(
+                $requestClassImportTokens,
                 UseStatement::getTokensFromClassName($requestClass->getName())
             );
         }
-        if ($requestClassImports && $lastUse = array_pop($useDeclarations)) {
-            $tokens->insertAt($lastUse->getEndIndex() + 1, $requestClassImports);
+        if ($requestClassImportTokens) {
+            if ($lastUse = array_pop($useDeclarations)) {
+                $insertAt = $lastUse->getEndIndex() + 1;
+            } else {
+                // @TODO: Support adding new use statements when no imports exist
+                return;
+            }
+            $tokens->insertAt($insertAt, $requestClassImportTokens);
             // Ensure new imports are in the correct order
             $orderFixer = new OrderedImportsFixer();
             $orderFixer->fix($file, $tokens);

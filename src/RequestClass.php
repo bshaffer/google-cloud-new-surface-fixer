@@ -23,4 +23,9 @@ class RequestClass
     {
         return $this->reflection->getName();
     }
+
+    public function __toString(): string
+    {
+        return $this->getName();
+    }
 }

@@ -24,4 +24,10 @@ class RpcMethod
 
         return null;
     }
+
+    public function getRequestClass(): RequestClass
+    {
+        $firstParameter = $this->reflection->getParameters()[0];
+        return new RequestClass($firstParameter->getType()->getName());
+    }
 }
