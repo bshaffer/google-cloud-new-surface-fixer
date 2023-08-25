@@ -18,21 +18,21 @@ $createDlpJobRequest = (new CreateDlpJobRequest())
 $dlp->createDlpJob($createDlpJobRequest);
 
 // required args variable and optional args array
-$createDlpJobRequest1 = (new CreateDlpJobRequest())
-    ->setParent($parent)
-    ->setJobId('abc')
-    ->setLocationId('def');
-$dlp->createDlpJob($createDlpJobRequest1);
-
-// required args string and optional variable
 $createDlpJobRequest2 = (new CreateDlpJobRequest())
-    ->setParent('path/to/parent')
+    ->setParent($parent)
     ->setJobId('abc')
     ->setLocationId('def');
 $dlp->createDlpJob($createDlpJobRequest2);
 
-// required args variable and optional args array with nested array
+// required args string and optional variable
 $createDlpJobRequest3 = (new CreateDlpJobRequest())
+    ->setParent('path/to/parent')
+    ->setJobId('abc')
+    ->setLocationId('def');
+$dlp->createDlpJob($createDlpJobRequest3);
+
+// required args variable and optional args array with nested array
+$createDlpJobRequest4 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob(new InspectJobConfig([
         'inspect_config' => (new InspectConfig())
@@ -44,4 +44,4 @@ $createDlpJobRequest3 = (new CreateDlpJobRequest())
             ->setCloudStorageOptions(($cloudStorageOptions))
             ->setTimespanConfig($timespanConfig),
     ]));
-$job = $dlp->createDlpJob($createDlpJobRequest3);
+$job = $dlp->createDlpJob($createDlpJobRequest4);

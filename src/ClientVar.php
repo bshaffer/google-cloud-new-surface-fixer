@@ -91,15 +91,8 @@ class ClientVar
         return $this->startIndex - $i;
     }
 
-    public static function getClientVarsFromTokens(Tokens $tokens, array $clients): array
+    public static function getClientVarsFromNewKeyword(Tokens $tokens, array $clientShortNames): array
     {
-        $clientShortNames = [];
-        foreach ($clients as $clientClass) {
-            // Save the client names so we know what we changed
-            $parts = explode('\\', $clientClass);
-            $shortName = array_pop($parts);
-            $clientShortNames[$clientClass] = $shortName;
-        }
         $clientVars = [];
         foreach ($tokens as $index => $token) {
             // get variables which are set directly
@@ -123,6 +116,29 @@ class ClientVar
                                     $clientVars[$varName] = new ClientVar($varName, $clientClass);
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $clientVars;
+    }
+
+    public static function getClientVarsFromVarTypehint(Tokens $tokens, array $clientShortNames): array
+    {
+        $clientVars = [];
+        foreach ($tokens as $index => $token) {
+            // get variables which are set directly
+            if ($token->isGivenKind(T_DOC_COMMENT) && false !== strpos($token->getContent(), '@var')) {
+                $varToken = $tokens[$tokens->getNextMeaningfulToken($index)];
+                if ($varToken->isGivenKind(T_VARIABLE)) {
+                    $regex = sprintf('/@var (.*) \\%s/', $varToken->getContent());
+                    if (preg_match($regex, $token->getContent(), $matches)) {
+                        $shortName = $matches[1];
+                        $varName = $varToken->getContent();
+                        if ($clientClass = array_search($shortName, $clientShortNames)) {
+                            $clientVars[$varName] = new ClientVar($varName, $clientClass);
                         }
                     }
                 }

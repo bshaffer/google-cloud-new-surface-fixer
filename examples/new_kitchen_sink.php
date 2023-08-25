@@ -25,8 +25,8 @@ $listInfoTypesRequest = new ListInfoTypesRequest();
 $infoTypes = $dlp->listInfoTypes($listInfoTypesRequest);
 
 // optional args array (variable form)
-$listInfoTypesRequest1 = new ListInfoTypesRequest();
-$dlp->listInfoTypes($listInfoTypesRequest1);
+$listInfoTypesRequest2 = new ListInfoTypesRequest();
+$dlp->listInfoTypes($listInfoTypesRequest2);
 
 // required args variable
 $createDlpJobRequest = (new CreateDlpJobRequest())
@@ -34,29 +34,29 @@ $createDlpJobRequest = (new CreateDlpJobRequest())
 $dlp->createDlpJob($createDlpJobRequest);
 
 // required args string
-$createDlpJobRequest1 = (new CreateDlpJobRequest())
-    ->setParent('this/is/a/parent');
-$dlp->createDlpJob($createDlpJobRequest1);
-
-// required args array
 $createDlpJobRequest2 = (new CreateDlpJobRequest())
-    ->setParent(['jobId' => 'abc', 'locationId' => 'def']);
+    ->setParent('this/is/a/parent');
 $dlp->createDlpJob($createDlpJobRequest2);
 
-// required args variable and optional args array
+// required args array
 $createDlpJobRequest3 = (new CreateDlpJobRequest())
+    ->setParent(['jobId' => 'abc', 'locationId' => 'def']);
+$dlp->createDlpJob($createDlpJobRequest3);
+
+// required args variable and optional args array
+$createDlpJobRequest4 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setJobId('abc')
     ->setLocationId('def');
-$dlp->createDlpJob($createDlpJobRequest3);
-
-// required args variable and optional args variable
-$createDlpJobRequest4 = (new CreateDlpJobRequest())
-    ->setParent($parent);
 $dlp->createDlpJob($createDlpJobRequest4);
 
-// required args variable and optional args array with nested array
+// required args variable and optional args variable
 $createDlpJobRequest5 = (new CreateDlpJobRequest())
+    ->setParent($parent);
+$dlp->createDlpJob($createDlpJobRequest5);
+
+// required args variable and optional args array with nested array
+$createDlpJobRequest6 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob(new InspectJobConfig([
         'inspect_config' => (new InspectConfig())
@@ -69,7 +69,7 @@ $createDlpJobRequest5 = (new CreateDlpJobRequest())
             ->setTimespanConfig($timespanConfig),
     ]))
     ->setTrailingComma(true);
-$job = $dlp->createDlpJob($createDlpJobRequest5);
+$job = $dlp->createDlpJob($createDlpJobRequest6);
 
 $projectId = 'my-project';
 $secretId = 'my-secret';

@@ -55,7 +55,17 @@ class NewSurfaceFixer extends AbstractFixer
         }
 
         // Get variable names for all clients
-        $clientVars = ClientVar::getClientVarsFromTokens($tokens, $clients);
+        $clientShortNames = [];
+        foreach ($clients as $clientClass) {
+            // Save the client shortnames so we can search for them below
+            $parts = explode('\\', $clientClass);
+            $shortName = array_pop($parts);
+            $clientShortNames[$clientClass] = $shortName;
+        }
+        $clientVars = array_merge(
+            ClientVar::getClientVarsFromNewKeyword($tokens, $clientShortNames),
+            ClientVar::getClientVarsFromVarTypehint($tokens, $clientShortNames),
+        );
 
         // Find the RPC methods being called on the clients
         $classesToImport = [];
@@ -232,28 +242,29 @@ class NewSurfaceFixer extends AbstractFixer
                     $prevStart = $argumentStart;
                     foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
                         $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
-                        if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
-                            $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
-                            $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
-                            $valueEnd = isset($arrayEntryIndices[$i+1])
-                                ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
-                                : $closeIndex;
-                            $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
-                            // Remove trailing whitespace
-                            for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
-                                unset($varTokens[$i]);
-                            }
-                            // Remove trailing commas
-                            for ($i = count($varTokens)-1; $varTokens[$i]->getContent() === ','; $i--) {
-                                unset($varTokens[$i]);
-                            }
-                            // Remove leading whitespace
-                            for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
-                                unset($varTokens[$i]);
-                            }
-                            $setters[] = [$setterName, $varTokens];
-                            $prevStart = $valueEnd;
+                        if (!$tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
+                            continue;
                         }
+                        $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
+                        $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
+                        $valueEnd = isset($arrayEntryIndices[$i+1])
+                            ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
+                            : $closeIndex;
+                        $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
+                        // Remove trailing whitespace
+                        for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
+                            unset($varTokens[$i]);
+                        }
+                        // Remove trailing commas
+                        for ($i = count($varTokens)-1; $varTokens[$i]->getContent() === ','; $i--) {
+                            unset($varTokens[$i]);
+                        }
+                        // Remove leading whitespace
+                        for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
+                            unset($varTokens[$i]);
+                        }
+                        $setters[] = [$setterName, $varTokens];
+                        $prevStart = $valueEnd;
                     }
                 } elseif ($tokens[$argumentStart]->isGivenKind(T_VARIABLE)) {
                     // if an array is being passed in, find where the array is defined and then do the same

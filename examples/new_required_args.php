@@ -14,16 +14,16 @@ $createDlpJobRequest = (new CreateDlpJobRequest())
 $dlp->createDlpJob($createDlpJobRequest);
 
 // required args string (double quotes)
-$createDlpJobRequest1 = (new CreateDlpJobRequest())
-    ->setParent("this/is/a/$variable");
-$dlp->createDlpJob($createDlpJobRequest1);
-
-// required args inline array
 $createDlpJobRequest2 = (new CreateDlpJobRequest())
-    ->setParent(['jobId' => 'abc', 'locationId' => 'def']);
+    ->setParent("this/is/a/$variable");
 $dlp->createDlpJob($createDlpJobRequest2);
 
-// required args variable
+// required args inline array
 $createDlpJobRequest3 = (new CreateDlpJobRequest())
-    ->setParent($foo);
+    ->setParent(['jobId' => 'abc', 'locationId' => 'def']);
 $dlp->createDlpJob($createDlpJobRequest3);
+
+// required args variable
+$createDlpJobRequest4 = (new CreateDlpJobRequest())
+    ->setParent($foo);
+$dlp->createDlpJob($createDlpJobRequest4);

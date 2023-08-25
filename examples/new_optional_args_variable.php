@@ -38,7 +38,7 @@ $options2 = [
             ->setTimespanConfig($timespanConfig),
     ])
 ];
-$createDlpJobRequest1 = (new CreateDlpJobRequest())
+$createDlpJobRequest2 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob($options2['inspectJob']);
-$job = $dlp->createDlpJob($createDlpJobRequest1);
+$job = $dlp->createDlpJob($createDlpJobRequest2);

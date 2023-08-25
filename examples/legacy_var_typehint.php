@@ -47,13 +47,14 @@ function get_operations_service_client()
 
 class VariablesInsideClass extends TestCase
 {
-    /** @var DlpServiceClient $instanceId */
+    /** @var DlpServiceClient $dlp */
     private $dlp;
     private SecretManagerServiceClient $secretmanager;
 
     public function callDlp()
     {
+        // These should update
         $infoTypes = $this->dlp->listInfoTypes();
-        $secrets = $secretmanager->listSecrets('this/is/a/parent');
+        $secrets = $this->secretmanager->listSecrets('this/is/a/parent');
     }
 }

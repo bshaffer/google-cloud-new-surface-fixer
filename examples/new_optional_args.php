@@ -25,7 +25,7 @@ $createDlpJobRequest = (new CreateDlpJobRequest())
 $job = $dlp->createDlpJob($createDlpJobRequest);
 
 // optional args array (inline with nested arrays)
-$createDlpJobRequest1 = (new CreateDlpJobRequest())
+$createDlpJobRequest2 = (new CreateDlpJobRequest())
     ->setParent($parent)
     ->setInspectJob(new InspectJobConfig([
         'inspect_config' => (new InspectConfig())
@@ -37,4 +37,4 @@ $createDlpJobRequest1 = (new CreateDlpJobRequest())
             ->setCloudStorageOptions(($cloudStorageOptions))
             ->setTimespanConfig($timespanConfig),
     ]));
-$job = $dlp->createDlpJob($createDlpJobRequest1);
+$job = $dlp->createDlpJob($createDlpJobRequest2);

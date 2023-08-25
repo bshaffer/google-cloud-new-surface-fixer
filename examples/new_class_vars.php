@@ -44,8 +44,8 @@ class ClientWrapper extends TestCase
 $wrapper = new ClientWrapper();
 
 // these should update
-$listInfoTypesRequest1 = new ListInfoTypesRequest();
-$infoTypes = $wrapper->dlp->listInfoTypes($listInfoTypesRequest1);
-$listSecretsRequest1 = (new ListSecretsRequest())
+$listInfoTypesRequest2 = new ListInfoTypesRequest();
+$infoTypes = $wrapper->dlp->listInfoTypes($listInfoTypesRequest2);
+$listSecretsRequest2 = (new ListSecretsRequest())
     ->setParent('this/is/a/parent');
-$secrets = $wrapper->secretmanager->listSecrets($listSecretsRequest1);
+$secrets = $wrapper->secretmanager->listSecrets($listSecretsRequest2);

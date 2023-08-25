@@ -19,11 +19,12 @@ class RequestVariableCounter
         if (!isset($this->varCounts[$shortName])) {
             $this->varCounts[$shortName] = 0;
         }
+        $num = (string) ++$this->varCounts[$shortName];
         // determine $request variable name depending on call count
         return sprintf(
             '$%s%s',
             lcfirst($shortName),
-            (string) $this->varCounts[$shortName]++ ?: ''
+            $num == '1' ? '' : $num
         );
     }
 }
