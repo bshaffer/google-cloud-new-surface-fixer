@@ -8,7 +8,7 @@ class RequestVariableCounter
 {
     private array $varCounts = [];
 
-    public function isFirstVar()
+    public function isFirstVar(): bool
     {
         return count($this->varCounts) == 1
             && array_values($this->varCounts)[0] == 1;

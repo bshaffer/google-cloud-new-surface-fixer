@@ -118,9 +118,8 @@ class NewSurfaceFixer extends AbstractFixer
             $requestSetterTokens = $this->getRequestSetterTokens($tokens, $rpcMethod, $arguments, $indent);
 
             // Tokens for initializing the new request variable
-            $newRequestTokens = $this->getInitNewRequestTokens(
+            $newRequestTokens = $requestClass->getInitTokens(
                 $requestVarName,
-                $requestClass->getShortName(),
                 count($requestSetterTokens) > 0
             );
 
@@ -179,27 +178,6 @@ class NewSurfaceFixer extends AbstractFixer
             $orderFixer = new OrderedImportsFixer();
             $orderFixer->fix($file, $tokens);
         }
-    }
-
-    private function getInitNewRequestTokens(
-        string $requestVarName,
-        string $requestClassShortName,
-        bool $parenthesis
-    ) {
-        // Add the code for creating the $request variable
-        return array_filter([
-            new Token([T_VARIABLE, $requestVarName]),
-            new Token([T_WHITESPACE, ' ']),
-            new Token('='),
-            new Token([T_WHITESPACE, ' ']),
-            $parenthesis ? new Token('(') : null,
-            new Token([T_NEW, 'new']),
-            new Token([T_WHITESPACE, ' ']),
-            new Token([T_STRING, $requestClassShortName]),
-            new Token('('),
-            new Token(')'),
-            $parenthesis ? new Token(')') : null,
-        ]);
     }
 
     private function getRequestSetterTokens(Tokens $tokens, RpcMethod $rpcMethod, array $arguments, string $indent)

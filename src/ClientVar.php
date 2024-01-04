@@ -46,7 +46,7 @@ class ClientVar
         return static::getNewClassFromClassname($this->className);
     }
 
-    public static function getNewClassFromClassname(string $className)
+    public static function getNewClassFromClassname(string $className): string
     {
         $parts = explode('\\', $className);
         $shortName = array_pop($parts);
