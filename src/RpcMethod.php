@@ -48,8 +48,6 @@ class RpcMethod
         int $argIndex,
         array $argumentTokens
     ): array {
-        $setters = [];
-        $setterName = null;
         if ($rpcParameter = $this->getParameterAtIndex($argIndex)) {
             // handle array of optional args!
             if ($rpcParameter->isOptionalArgs()) {
@@ -86,8 +84,7 @@ class RpcMethod
         } else {
             // Could not find the argument for $clientFullName and $rpcName at index $argIndex
         }
-
-        return $setters;
+        return [];
     }
 
     private function getParameterAtIndex(int $index): ?RpcParameter
