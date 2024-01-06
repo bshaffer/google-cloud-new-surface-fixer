@@ -40,7 +40,6 @@ return (new PhpCsFixer\Config())
     ])
     ->setRules([
         'GoogleCloud/new_surface_fixer' => true,
-        'ordered_imports' => true,
     ])
 ;
 ```
