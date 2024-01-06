@@ -55,41 +55,12 @@ class RpcMethod
             if ($rpcParameter->isOptionalArgs()) {
                 $argumentStart = $tokens->getNextMeaningfulToken($startIndex);
                 if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
-                    // If it's an inline array, use the keys to determine the setters
-                    $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $argumentStart);
-                    $arrayEntries = $this->getSettersFromInlineArray($tokens, $argumentStart, $closeIndex);
+                    // If the array is being passed directly to the RPC method
+                    return $this->settersFromArgumentArray($tokens, $argumentStart);
+                }
 
-                    // Add a setter for each top-level array entry
-                    $arrayEntryIndices = array_keys($arrayEntries);
-                    $prevStart = $argumentStart;
-                    foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
-                        $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
-                        if (!$tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
-                            continue;
-                        }
-                        $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
-                        $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
-                        $valueEnd = isset($arrayEntryIndices[$i+1])
-                            ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
-                            : $closeIndex;
-                        $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
-                        // Remove trailing whitespace
-                        for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
-                            unset($varTokens[$i]);
-                        }
-                        // Remove trailing commas
-                        for ($i = count($varTokens)-1; $varTokens[$i]->getContent() === ','; $i--) {
-                            unset($varTokens[$i]);
-                        }
-                        // Remove leading whitespace
-                        for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
-                            unset($varTokens[$i]);
-                        }
-                        $setters[] = [$setterName, $varTokens];
-                        $prevStart = $valueEnd;
-                    }
-                } elseif ($tokens[$argumentStart]->isGivenKind(T_VARIABLE)) {
-                    // if an array is being passed in, find where the array is defined and then do the same
+                if ($tokens[$argumentStart]->isGivenKind(T_VARIABLE)) {
+                    // if a variable is being passed in, find where the variable is defined
                     $optionalArgsVar = $tokens[$argumentStart]->getContent();
                     for ($index = $argumentStart - 1; $index > 0; $index--) {
                         $token = $tokens[$index];
@@ -98,30 +69,7 @@ class RpcMethod
                             $nextIndex = $tokens->getNextMeaningfulToken($index);
                             if ($tokens[$nextIndex]->getContent() == '=') {
                                 $argumentStart = $tokens->getNextMeaningfulToken($nextIndex);
-                                if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
-                                    $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $argumentStart);
-                                    $arrayEntries = $this->getSettersFromInlineArray($tokens, $argumentStart, $closeIndex);
-                                    // Add a setter for each top-level array entry
-                                    $arrayEntryIndices = array_keys($arrayEntries);
-                                    $prevStart = $argumentStart;
-                                    foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
-                                        $keyIndex = $tokens->getNextMeaningfulToken($prevStart);
-                                        if ($tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
-                                            $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
-                                            $varTokens = [
-                                                new Token([T_VARIABLE, $optionalArgsVar]),
-                                                new Token([CT::T_ARRAY_SQUARE_BRACE_OPEN, '[']),
-                                                clone $tokens[$keyIndex],
-                                                new Token([CT::T_ARRAY_SQUARE_BRACE_CLOSE, ']']),
-                                            ];
-                                            $setters[] = [$setterName, $varTokens];
-                                            $valueEnd = isset($arrayEntryIndices[$i+1])
-                                                ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
-                                                : $closeIndex;
-                                            $prevStart = $valueEnd;
-                                        }
-                                    }
-                                }
+                                return $this->settersFromOptionalArgsVar($tokens, $argumentStart, $optionalArgsVar);
                             }
                         }
                     }
@@ -136,7 +84,7 @@ class RpcMethod
                 return [[$setterName, $argumentTokens]];
             }
         } else {
-            // print('Could not find argument for ' . $clientFullName . '::' . $rpcName . ' at index ' . $argIndex);
+            // Could not find the argument for $clientFullName and $rpcName at index $argIndex
         }
 
         return $setters;
@@ -152,7 +100,7 @@ class RpcMethod
         return null;
     }
 
-    private function getSettersFromInlineArray(Tokens $tokens, int $argumentStart, int $closeIndex)
+    private function getSetterIndiciesFromInlineArray(Tokens $tokens, int $argumentStart, int $closeIndex)
     {
         $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $argumentStart, $closeIndex);
         $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $argumentStart + 1, $closeIndex);
@@ -167,7 +115,7 @@ class RpcMethod
             }
         }
 
-        return $arrayEntries;
+        return array_keys($arrayEntries);
     }
 
     private function getTokensForSetter(array $setter, string $indent): array
@@ -190,5 +138,77 @@ class RpcMethod
         $tokens[] = new Token(')');
 
         return $tokens;
+    }
+
+    private function settersFromArgumentArray(Tokens $tokens, int $index): array
+    {
+        $setters = [];
+        if (!$tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+            return $setters;
+        }
+
+        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $index);
+        $arrayEntryIndices = $this->getSetterIndiciesFromInlineArray($tokens, $index, $closeIndex);
+
+        foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
+            $keyIndex = $tokens->getNextMeaningfulToken($index);
+            if (!$tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
+                continue;
+            }
+            $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
+            $tokens->removeLeadingWhitespace($doubleArrowIndex + 1);
+            $valueEnd = isset($arrayEntryIndices[$i+1])
+                ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
+                : $closeIndex;
+            $varTokens = array_slice($tokens->toArray(), $doubleArrowIndex + 1, $valueEnd - $doubleArrowIndex - 1);
+            // Remove trailing whitespace
+            for ($i = count($varTokens)-1; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i--) {
+                unset($varTokens[$i]);
+            }
+            // Remove trailing commas
+            for ($i = count($varTokens)-1; $varTokens[$i]->getContent() === ','; $i--) {
+                unset($varTokens[$i]);
+            }
+            // Remove leading whitespace
+            for ($i = 0; $varTokens[$i]->isGivenKind(T_WHITESPACE); $i++) {
+                unset($varTokens[$i]);
+            }
+            $setters[] = [$setterName, $varTokens];
+            $index = $valueEnd;
+        }
+        return $setters;
+    }
+
+    private function settersFromOptionalArgsVar(Tokens $tokens, int $index, string $optionalArgsVar): array
+    {
+        $setters = [];
+        if (!$tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+            return $setters;
+        }
+
+        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $index);
+        $arrayEntryIndices = $this->getSetterIndiciesFromInlineArray($tokens, $index, $closeIndex);
+
+        foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
+            $keyIndex = $tokens->getNextMeaningfulToken($index);
+            if (!$tokens[$keyIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)) {
+                continue;
+            }
+
+            $setterName = 'set' . ucfirst(trim($tokens[$keyIndex]->getContent(), '"\''));
+            $varTokens = [
+                new Token([T_VARIABLE, $optionalArgsVar]),
+                new Token([CT::T_ARRAY_SQUARE_BRACE_OPEN, '[']),
+                clone $tokens[$keyIndex],
+                new Token([CT::T_ARRAY_SQUARE_BRACE_CLOSE, ']']),
+            ];
+            $setters[] = [$setterName, $varTokens];
+            $valueEnd = isset($arrayEntryIndices[$i+1])
+                ? $tokens->getPrevTokenOfKind($arrayEntryIndices[$i+1], [new Token(',')])
+                : $closeIndex;
+            $index = $valueEnd;
+        }
+
+        return $setters;
     }
 }
