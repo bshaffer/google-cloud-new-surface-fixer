@@ -224,6 +224,7 @@ class NewSurfaceFixer extends AbstractFixer
             [T_CONSTANT_ENCAPSED_STRING],
             [T_VARIABLE],
             [T_NEW],
+            [T_ARRAY],
         ])) {
             $blockType = Tokens::detectBlockType($nextToken);
 

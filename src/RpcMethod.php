@@ -52,7 +52,8 @@ class RpcMethod
             // handle array of optional args!
             if ($rpcParameter->isOptionalArgs()) {
                 $argumentStart = $tokens->getNextMeaningfulToken($startIndex);
-                if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+                if ($tokens[$argumentStart]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)
+                    || $tokens[$argumentStart]->isGivenKind(T_ARRAY)) {
                     // If the array is being passed directly to the RPC method
                     return $this->settersFromArgumentArray($tokens, $argumentStart);
                 }
@@ -97,16 +98,23 @@ class RpcMethod
         return null;
     }
 
-    private function getSetterIndiciesFromInlineArray(Tokens $tokens, int $argumentStart, int $closeIndex)
+    private function getSetterIndiciesFromInlineArray(Tokens $tokens, int $index, int $closeIndex)
     {
-        $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $argumentStart, $closeIndex);
-        $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $argumentStart + 1, $closeIndex);
+        $arrayEntries = $tokens->findGivenKind(T_DOUBLE_ARROW, $index, $closeIndex);
+        $nestedArrays = $tokens->findGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN, $index + 1, $closeIndex);
+        $nestedLegacyArrays = $tokens->findGivenKind(T_ARRAY, $index + 1, $closeIndex);
 
         // skip nested arrays
         foreach ($arrayEntries as $doubleArrowIndex => $doubleArrowIndexToken) {
             foreach ($nestedArrays as $nestedArrayIndex => $nestedArrayIndexToken) {
                 $nestedArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $nestedArrayIndex);
                 if ($doubleArrowIndex > $nestedArrayIndex && $doubleArrowIndex < $nestedArrayCloseIndex) {
+                    unset($arrayEntries[$doubleArrowIndex]);
+                }
+            }
+            foreach ($nestedLegacyArrays as $nestedLegacyArrayIndex => $nestedLegacyArrayIndexToken) {
+                $nestedLegacyArrayCloseIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $nestedLegacyArrayIndex + 1);
+                if ($doubleArrowIndex > $nestedLegacyArrayIndex && $doubleArrowIndex < $nestedLegacyArrayCloseIndex) {
                     unset($arrayEntries[$doubleArrowIndex]);
                 }
             }
@@ -140,12 +148,12 @@ class RpcMethod
     private function settersFromArgumentArray(Tokens $tokens, int $index): array
     {
         $setters = [];
-        if (!$tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
-            return $setters;
-        }
+        $legacyArraySyntax = $tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN);
+        $closeIndex = $legacyArraySyntax
+            ? $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $index)
+            : $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, ++$index);
 
-        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $index);
-        $arrayEntryIndices = $this->getSetterIndiciesFromInlineArray($tokens, $index, $closeIndex);
+        $arrayEntryIndices = $this->getSetterIndiciesFromInlineArray($tokens, $index, $closeIndex, $legacyArraySyntax);
 
         foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
             $keyIndex = $tokens->getNextMeaningfulToken($index);
@@ -179,11 +187,14 @@ class RpcMethod
     private function settersFromOptionalArgsVar(Tokens $tokens, int $index, string $optionalArgsVar): array
     {
         $setters = [];
-        if (!$tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)) {
+        if (!$tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)
+            && !$tokens[$index]->isGivenKind(T_ARRAY)) {
             return $setters;
         }
 
-        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $index);
+        $closeIndex = $tokens[$index]->isGivenKind(CT::T_ARRAY_SQUARE_BRACE_OPEN)
+            ? $tokens->findBlockEnd(Tokens::BLOCK_TYPE_ARRAY_SQUARE_BRACE, $index)
+            : $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $index + 1);
         $arrayEntryIndices = $this->getSetterIndiciesFromInlineArray($tokens, $index, $closeIndex);
 
         foreach ($arrayEntryIndices as $i => $doubleArrowIndex) {
