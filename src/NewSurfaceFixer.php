@@ -13,8 +13,12 @@ use PhpCsFixer\Tokenizer\Token;
 use PhpCsFixer\Tokenizer\Tokens;
 use ReflectionClass;
 use ReflectionMethod;
+use PhpCsFixer\Fixer\ConfigurableFixerInterface;
+use PhpCsFixer\FixerConfiguration\FixerConfigurationResolver;
+use PhpCsFixer\FixerConfiguration\FixerOptionBuilder;
+use PhpCsFixer\FixerConfiguration\FixerConfigurationResolverInterface;
 
-class NewSurfaceFixer extends AbstractFixer
+class NewSurfaceFixer extends AbstractFixer implements ConfigurableFixerInterface
 {
     /**
      * Check if the fixer is a candidate for given Tokens collection.
@@ -28,6 +32,28 @@ class NewSurfaceFixer extends AbstractFixer
     public function isCandidate(Tokens $tokens): bool
     {
         return true;
+    }
+
+    /**
+     * @param array<string, mixed> $configuration
+     */
+    public function configure(array $configuration): void
+    {
+        // no configuration assumes true
+        $this->configuration = $configuration;
+    }
+
+    /**
+     * Defines the available configuration options of the fixer.
+     */
+    public function getConfigurationDefinition(): FixerConfigurationResolverInterface
+    {
+        return new FixerConfigurationResolver([
+            (new FixerOptionBuilder('clientVars', 'A map of client variables to their new class names'))
+                ->setAllowedTypes(['array'])
+                ->setDefault([])
+                ->getOption(),
+        ]);
     }
 
     protected function applyFix(\SplFileInfo $file, Tokens $tokens): void
@@ -65,6 +91,7 @@ class NewSurfaceFixer extends AbstractFixer
         $clientVars = array_merge(
             ClientVar::getClientVarsFromNewKeyword($tokens, $clientShortNames),
             ClientVar::getClientVarsFromVarTypehint($tokens, $clientShortNames),
+            ClientVar::getClientVarsFromConfiguration($this->configuration),
         );
 
         // Find the RPC methods being called on the clients
@@ -169,6 +196,11 @@ class NewSurfaceFixer extends AbstractFixer
 
         // Import the new request classes
         if ($classesToImport) {
+            $importedClasses = array_map(fn ($useDeclaration) => $useDeclaration->getFullName(), $useDeclarations);
+            $classesToImport = array_filter(
+                $classesToImport,
+                fn($requestClass) => !isset($importedClasses[$requestClass->getName()])
+            );
             $requestClassImportTokens = array_map(
                 fn($requestClass) => $requestClass->getImportTokens(),
                 array_values($classesToImport)

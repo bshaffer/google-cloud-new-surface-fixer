@@ -14,6 +14,13 @@ class ExamplesTest extends TestCase
     public function setUp(): void
     {
         $this->fixer = new NewSurfaceFixer();
+        $this->fixer->configure([
+            'clientVars' => [
+                '$secretmanager' => 'Google\\Cloud\\SecretManager\\V1\\SecretManagerServiceClient',
+                'dlpClient' => 'Google\\Cloud\\Dlp\\V2\\DlpServiceClient',
+                '$dlpClient' => 'Google\\Cloud\\Dlp\\V2\\DlpServiceClient',
+            ]
+        ]);
     }
 
     /**

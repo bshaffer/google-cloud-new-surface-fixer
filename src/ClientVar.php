@@ -147,4 +147,15 @@ class ClientVar
 
         return $clientVars;
     }
+
+    public static function getClientVarsFromConfiguration(array $configuration): array
+    {
+        $clientVars = [];
+        if (isset($configuration['clientVars'])) {
+            foreach ($configuration['clientVars'] as $varName => $clientClass) {
+                $clientVars[$varName] = new ClientVar($varName, $clientClass);
+            }
+        }
+        return $clientVars;
+    }
 }
