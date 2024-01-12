@@ -125,7 +125,7 @@ class NewSurfaceFixer extends AbstractFixer implements ConfigurableFixerInterfac
             }
 
             // Get the arguments being passed to the RPC method
-            [$arguments, $firstIndex, $lastIndex] = $this->getRpcCallArguments($tokens, $methodIndex);
+            [$arguments, $firstIndex, $lastIndex] = RpcParameter::getRpcCallParameters($tokens, $methodIndex);
 
             // determine where to insert the new tokens
             $lineStart = $clientVar->getLineStart($tokens);
@@ -210,80 +210,6 @@ class NewSurfaceFixer extends AbstractFixer implements ConfigurableFixerInterfac
             $orderFixer = new OrderedImportsFixer();
             $orderFixer->fix($file, $tokens);
         }
-    }
-
-    private function getRpcCallArguments(Tokens $tokens, int $startIndex)
-    {
-        $arguments = [];
-        $nextIndex = $tokens->getNextMeaningfulToken($startIndex);
-        $lastIndex = null;
-        if ($tokens[$nextIndex]->getContent() == '(') {
-            $startIndex = $nextIndex;
-            $lastIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $nextIndex);
-            $nextArgumentEnd = $this->getNextArgumentEnd($tokens, $nextIndex);
-            while ($nextArgumentEnd != $nextIndex) {
-                $argumentTokens = [];
-                for ($i = $nextIndex + 1; $i <= $nextArgumentEnd; $i++) {
-                    $argumentTokens[] = $tokens[$i];
-                }
-
-                $arguments[$nextIndex] = $argumentTokens;
-                $nextIndex = $tokens->getNextMeaningfulToken($nextArgumentEnd);
-                $nextArgumentEnd = $this->getNextArgumentEnd($tokens, $nextIndex);
-            }
-        }
-
-        return [$arguments, $startIndex, $lastIndex];
-    }
-
-    private function getNextArgumentEnd(Tokens $tokens, int $index): int
-    {
-        $nextIndex = $tokens->getNextMeaningfulToken($index);
-        $nextToken = $tokens[$nextIndex];
-
-        while ($nextToken->equalsAny([
-            '$',
-            '[',
-            '(',
-            [CT::T_ARRAY_INDEX_CURLY_BRACE_OPEN],
-            [CT::T_ARRAY_SQUARE_BRACE_OPEN],
-            [CT::T_DYNAMIC_PROP_BRACE_OPEN],
-            [CT::T_DYNAMIC_VAR_BRACE_OPEN],
-            [CT::T_NAMESPACE_OPERATOR],
-            [T_NS_SEPARATOR],
-            [T_STATIC],
-            [T_STRING],
-            [T_CONSTANT_ENCAPSED_STRING],
-            [T_VARIABLE],
-            [T_NEW],
-            [T_ARRAY],
-        ])) {
-            $blockType = Tokens::detectBlockType($nextToken);
-
-            if (null !== $blockType) {
-                $nextIndex = $tokens->findBlockEnd($blockType['type'], $nextIndex);
-            }
-
-            $index = $nextIndex;
-            $nextIndex = $tokens->getNextMeaningfulToken($nextIndex);
-            $nextToken = $tokens[$nextIndex];
-        }
-
-        if ($nextToken->isGivenKind(T_OBJECT_OPERATOR)) {
-            return $this->getNextArgumentEnd($tokens, $nextIndex);
-        }
-
-        if ($nextToken->isGivenKind(T_PAAMAYIM_NEKUDOTAYIM)) {
-            return $this->getNextArgumentEnd($tokens, $tokens->getNextMeaningfulToken($nextIndex));
-        }
-
-        if ('"' === $nextToken->getContent()) {
-            if ($endIndex = $tokens->getNextTokenOfKind($nextIndex + 1, ['"'])) {
-                return $endIndex;
-            }
-        }
-
-        return $index;
     }
 
     private function getImportStart(Tokens $tokens)
